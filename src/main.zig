@@ -20,6 +20,7 @@ pub fn main() !void {
     const App = zen.App(.{
         .servers = .{
             zen.tcp.Server(.{
+                // .listen = "127.0.0.1:1355",
                 .listen = Config.lazy.TCP_BIND,
             }),
         },

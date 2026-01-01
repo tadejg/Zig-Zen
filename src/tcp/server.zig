@@ -12,11 +12,7 @@ pub fn Server(comptime spec: anytype) type {
         };
 
         pub fn start(config: anytype) !Instance {
-            const listen = if (comptime cfg.ref.isRef(spec.listen)) blk: {
-                break :blk spec.listen.resolve(config.value);
-            } else blk: {
-                break :blk spec.listen;
-            };
+            const listen = cfg.ref.resolveIfRef(spec.listen, config.value);
             return Instance.init(.{ .listen = listen });
         }
 

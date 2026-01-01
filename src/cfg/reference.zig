@@ -23,11 +23,20 @@ pub fn Reference(comptime T: type, comptime ref: []const []const u8) type {
     };
 }
 
-pub fn isRef(comptime T: type) bool {
+pub fn isRef(comptime T: anytype) bool {
+    if (@TypeOf(T) != type) return false;
     return switch (@typeInfo(T)) {
         .@"struct" => @hasDecl(T, "_ref") and @hasDecl(T, "Type") and @hasDecl(T, "resolve"),
         else => false,
     };
+}
+
+pub fn resolveIfRef(comptime value: anytype, obj: anytype) if (isRef(value)) value.Type else @TypeOf(value) {
+    if (comptime isRef(value)) {
+        return value.resolve(obj);
+    } else {
+        return value;
+    }
 }
 
 pub fn References(comptime Spec: type) type {
@@ -40,7 +49,8 @@ fn StructReference(comptime T: type, refStack: []const []const u8) type {
     comptime var fieldTypes: [fields.len]type = undefined;
     comptime var fieldAttrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
     inline for (fields, 0..) |field, i| {
-        const typeInfo = @typeInfo(field.type);
+        var typeInfo = @typeInfo(field.type);
+        if (typeInfo == .optional) typeInfo = @typeInfo(typeInfo.optional.child);
         fieldNames = fieldNames ++ .{field.name};
         switch (typeInfo) {
             .int, .float, .bool, .@"enum", .array, .pointer => {

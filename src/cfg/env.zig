@@ -20,7 +20,7 @@ fn loadValue(comptime T: type, comptime name: []const u8, allocator: std.mem.All
         },
         else => return e,
     };
-    return coerceValue(T, value, allocator);
+    return try coerceValue(T, value, allocator);
 }
 
 pub const CoerceValueError = error{
@@ -34,7 +34,7 @@ fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator
     return switch (typeInfo) {
         .int => std.fmt.parseInt(T, value, 10),
         .float => std.fmt.parseFloat(T, value),
-        .optional => |opt| coerceValue(opt.child, value, allocator),
+        .optional => |opt| try coerceValue(opt.child, value, allocator),
         .bool => blk: {
             if (std.ascii.eqlIgnoreCase(value, "true") or std.mem.eql(u8, value, "1")) {
                 break :blk true;

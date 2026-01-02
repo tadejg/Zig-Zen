@@ -137,7 +137,8 @@ std.debug.print("{s}\n", .{ cfg.value.PWD });
 
 Similar to the [system environment source](#system-environment), except values are loaded from a dotenv string.
 
-> Generally, this source is zero-allocation, except when loading slices
+> Generally, this source is zero-allocation, except when loading slices, however the input string must outlive the
+> config instance.
 
 String loaded from a `.env` file:
 ```

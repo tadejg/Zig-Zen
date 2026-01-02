@@ -1,5 +1,5 @@
 const std = @import("std");
-const Socket = @import("../socket.zig");
+const zio = @import("../zio/root.zig");
 const cfg = @import("../cfg/root.zig");
 
 pub fn Server(comptime spec: anytype) type {
@@ -9,26 +9,29 @@ pub fn Server(comptime spec: anytype) type {
 
         pub const StartOpts = struct {
             listen: []const u8,
+            reactor: *zio.Reactor,
         };
 
-        pub fn start(config: anytype) !Instance {
+        /// The instance needs a stable pointer as it registers it with the reactor for event notifications
+        pub fn start(instance: *Instance, config: anytype, reactor: *zio.Reactor) !void {
             const listen = cfg.ref.resolveIfRef(spec.listen, config.value);
-            return Instance.init(.{ .listen = listen });
+            try instance.init(.{ .listen = listen, .reactor = reactor });
         }
 
         pub const Instance = struct {
             const Self = @This();
 
-            socket: Socket,
+            handler: zio.Reactor.Handler = .{ .extra = null, .callback = handleSocketEvent },
+            socket: zio.Socket = .{ .fd = -1 },
 
             pub const InitError = error{
                 MissingHost,
                 MissingPort,
                 InvalidHost,
                 MalformedUri,
-            } || Socket.BindError || std.posix.SocketError || std.fmt.ParseIntError;
+            } || zio.Socket.BindError || zio.Socket.ListenError || std.posix.SocketError || std.fmt.ParseIntError || zio.Reactor.AddSocketError;
 
-            pub fn init(opts: StartOpts) InitError!Self {
+            pub fn init(self: *Self, opts: StartOpts) InitError!void {
                 var it = std.mem.splitScalar(u8, opts.listen, ':');
                 const host = it.next();
                 const portStr = it.next();
@@ -37,16 +40,25 @@ pub fn Server(comptime spec: anytype) type {
                 if (it.next() != null) return error.MalformedUri;
                 const port = try std.fmt.parseInt(u16, portStr.?, 10);
                 const ip = std.Io.net.IpAddress.parse(host.?, port) catch return error.InvalidHost;
-                var socket = try Socket.init();
-                errdefer socket.deinit();
-                try socket.bind(&ip);
-                return .{
-                    .socket = socket,
-                };
+                self.socket = try zio.Socket.init();
+                errdefer self.socket.deinit();
+                try self.socket.bind(&ip);
+                try self.socket.listen(128); // TODO configurable backlog
+                self.handler.extra = self;
+                try opts.reactor.addSocket(self.socket, &self.handler);
             }
 
-            pub fn stop(self: *Self) void {
+            pub fn stop(self: *Self, reactor: *zio.Reactor) void {
+                reactor.removeSocket(self.socket) catch {
+                    // TODO log
+                };
                 self.socket.deinit();
+            }
+
+            fn handleSocketEvent(extra: ?*anyopaque, event: zio.Reactor.Handler.Event) void {
+                const self: *Self = @ptrCast(@alignCast(extra.?));
+                _ = self;
+                _ = event; // TODO
             }
         };
     };
@@ -60,7 +72,10 @@ fn validateSpec(comptime spec: anytype) void {
     const isSlice = listenTypeInfo == .pointer and listenTypeInfo.pointer.size == .slice;
     const isSliceStr = isSlice and listenTypeInfo.pointer.child == u8;
     const isSinglePtr = listenTypeInfo == .pointer and listenTypeInfo.pointer.size == .one;
-    const isArrayPtrStr = isSinglePtr and @typeInfo(listenTypeInfo.pointer.child) == .array and @typeInfo(listenTypeInfo.pointer.child).array.child == u8;
+    const isArrayPtrStr = isSinglePtr and blk: {
+        const childTypeInfo = @typeInfo(listenTypeInfo.pointer.child);
+        break :blk childTypeInfo == .array and childTypeInfo.array.child == u8;
+    };
     const isStr = isSliceStr or isArrayPtrStr;
     if (!isStr and !cfg.ref.isRef(spec.listen)) {
         @compileError("TCP server spec .listen must be a string or cfg.ref.Reference(), got " ++ @typeName(ListenType));

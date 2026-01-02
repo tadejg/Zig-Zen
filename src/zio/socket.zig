@@ -1,3 +1,4 @@
+//! Must be stateless, apart from the socket fd
 const std = @import("std");
 
 const net = std.Io.net;
@@ -24,7 +25,7 @@ pub fn bind(self: *Self, ip: *const net.IpAddress) BindError!void {
     switch (ip.*) {
         .ip4 => |v| {
             in = std.posix.sockaddr.in{
-                .port = v.port,
+                .port = std.mem.nativeToBig(u16, v.port),
                 .addr = std.mem.bytesToValue(u32, &v.bytes),
             };
             sockaddr = @ptrCast(@alignCast(&in));
@@ -32,7 +33,7 @@ pub fn bind(self: *Self, ip: *const net.IpAddress) BindError!void {
         .ip6 => |v| {
             in6 = std.posix.sockaddr.in6{
                 .addr = v.bytes,
-                .port = v.port,
+                .port = std.mem.nativeToBig(u16, v.port),
                 .flowinfo = v.flow,
                 .scope_id = v.interface.index,
             };
@@ -40,4 +41,10 @@ pub fn bind(self: *Self, ip: *const net.IpAddress) BindError!void {
         },
     }
     try std.posix.bind(self.fd, sockaddr, @sizeOf(std.posix.sockaddr));
+}
+
+pub const ListenError = std.posix.ListenError;
+
+pub fn listen(self: *Self, backlog: u31) ListenError!void {
+    try std.posix.listen(self.fd, backlog);
 }

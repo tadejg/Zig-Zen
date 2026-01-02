@@ -25,5 +25,5 @@ pub fn main() !void {
             }),
         },
     });
-    try zen.run(App, threaded.io(), cfg);
+    try zen.run.sync(App, threaded.io(), cfg);
 }

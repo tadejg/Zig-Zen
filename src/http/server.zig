@@ -43,10 +43,10 @@ pub fn Server(comptime spec: anytype) type {
                 buffers: ClientBuffers,
             };
 
-            server: TcpServer.Instance = undefined,
-            reactor: *zio.Reactor = undefined,
-            readBuffer: zio.FixedBufferPool = undefined,
-            writeBuffer: zio.FixedBufferPool = undefined,
+            server: TcpServer.Instance,
+            reactor: *zio.Reactor,
+            readBuffer: zio.FixedBufferPool,
+            writeBuffer: zio.FixedBufferPool,
 
             pub const InitError = zio.FixedBufferPool.InitError || TcpServer.Instance.InitError;
 
@@ -63,6 +63,7 @@ pub fn Server(comptime spec: anytype) type {
                         opts.buffers.writeBuffer.freeStack,
                         opts.buffers.writeBuffer.chunkSize,
                     ),
+                    .server = undefined,
                 };
                 try TcpServer.Instance.init(&self.server, .{
                     .listen = opts.listen,

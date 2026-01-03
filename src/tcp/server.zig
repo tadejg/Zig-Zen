@@ -24,7 +24,7 @@ pub fn Server(comptime spec: anytype) type {
             };
 
             handler: zio.Reactor.Handler = .{ .extra = null, .callback = handleSocketEvent },
-            socket: zio.Socket = .{ .fd = -1 },
+            socket: zio.Socket,
             handleConnectionExtra: ?*anyopaque = null,
 
             const InitZioSocketError = zio.Socket.BindError || zio.Socket.ListenError;
@@ -44,7 +44,7 @@ pub fn Server(comptime spec: anytype) type {
                 if (it.next() != null) return error.MalformedUri;
                 const port = try std.fmt.parseInt(u16, portStr.?, 10);
                 const ip = std.Io.net.IpAddress.parse(host.?, port) catch return error.InvalidHost;
-                self.socket = try zio.Socket.init();
+                self.* = .{ .socket = try zio.Socket.init() };
                 errdefer self.socket.deinit();
                 try self.socket.bind(&ip);
                 try self.socket.listen(128); // TODO configurable backlog

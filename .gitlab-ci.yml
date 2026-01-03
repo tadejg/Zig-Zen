@@ -10,6 +10,6 @@ create-pages:
     - apt update && apt install -y apt-transport-https xz-utils wget
     - wget
       https://ziglang.org/builds/$ZIG_VERSION.tar.xz
-    - tar-xf $ZIG_VERSION.tar.xz
+    - tar -xf $ZIG_VERSION.tar.xz
   script:
     - ./$ZIG_VERSION/zig build docs

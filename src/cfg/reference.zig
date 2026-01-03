@@ -14,6 +14,45 @@ pub fn Reference(comptime T: type, comptime ref: []const []const u8) type {
     };
 }
 
+fn StructReference(comptime T: type, refStack: []const []const u8) type {
+    const fields = std.meta.fields(T);
+    const numFields = fields.len + 2; // Extra fields to store metadata needed to resolve the entire struct as a ref
+    comptime var fieldNames: []const []const u8 = &.{ "__struct_ref", "__struct_type" };
+    comptime var fieldTypes: [numFields]type = undefined;
+    comptime var fieldAttrs: [numFields]std.builtin.Type.StructField.Attributes = undefined;
+    fieldTypes[0] = []const []const u8;
+    fieldAttrs[0] = .{ .default_value_ptr = @ptrCast(@alignCast(&refStack)) };
+    fieldTypes[1] = type;
+    fieldAttrs[1] = .{ .default_value_ptr = &T };
+    inline for (fields, 2..) |field, i| {
+        var typeInfo = @typeInfo(field.type);
+        if (typeInfo == .optional) typeInfo = @typeInfo(typeInfo.optional.child);
+        fieldNames = fieldNames ++ .{field.name};
+        switch (typeInfo) {
+            .int, .float, .bool, .@"enum", .array, .pointer => {
+                fieldTypes[i] = type;
+                fieldAttrs[i] = .{ .default_value_ptr = &Reference(field.type, refStack ++ .{field.name}) };
+            },
+            .@"struct" => {
+                fieldTypes[i] = StructReference(field.type, refStack ++ .{field.name});
+                fieldAttrs[i] = .{ .default_value_ptr = &fieldTypes[i]{} };
+            },
+            else => @compileError("Unsupported reference field type " ++ @typeName(field.type)),
+        }
+    }
+    return @Struct(
+        .auto,
+        null,
+        fieldNames,
+        &fieldTypes,
+        &fieldAttrs,
+    );
+}
+
+pub fn References(comptime Spec: type) type {
+    return StructReference(Spec, &.{});
+}
+
 pub fn Resolved(comptime ref: anytype) type {
     if (comptime isRef(ref)) return ref.Type;
     if (comptime isStructRef(ref)) return ref.__struct_type;
@@ -82,41 +121,30 @@ pub fn resolveIfRef(comptime value: anytype, obj: anytype) if (isAnyRef(value)) 
     }
 }
 
-pub fn References(comptime Spec: type) type {
-    return StructReference(Spec, &.{});
-}
-
-fn StructReference(comptime T: type, refStack: []const []const u8) type {
-    const fields = std.meta.fields(T);
-    const numFields = fields.len + 2; // Extra fields to store metadata needed to resolve the entire struct as a ref
-    comptime var fieldNames: []const []const u8 = &.{ "__struct_ref", "__struct_type" };
-    comptime var fieldTypes: [numFields]type = undefined;
-    comptime var fieldAttrs: [numFields]std.builtin.Type.StructField.Attributes = undefined;
-    fieldTypes[0] = []const []const u8;
-    fieldAttrs[0] = .{ .default_value_ptr = @ptrCast(@alignCast(&refStack)) };
-    fieldTypes[1] = type;
-    fieldAttrs[1] = .{ .default_value_ptr = &T };
-    inline for (fields, 2..) |field, i| {
-        var typeInfo = @typeInfo(field.type);
-        if (typeInfo == .optional) typeInfo = @typeInfo(typeInfo.optional.child);
-        fieldNames = fieldNames ++ .{field.name};
-        switch (typeInfo) {
-            .int, .float, .bool, .@"enum", .array, .pointer => {
-                fieldTypes[i] = type;
-                fieldAttrs[i] = .{ .default_value_ptr = &Reference(field.type, refStack ++ .{field.name}) };
-            },
-            .@"struct" => {
-                fieldTypes[i] = StructReference(field.type, refStack ++ .{field.name});
-                fieldAttrs[i] = .{ .default_value_ptr = &fieldTypes[i]{} };
-            },
-            else => @compileError("Unsupported reference field type " ++ @typeName(field.type)),
-        }
-    }
-    return @Struct(
-        .auto,
-        null,
-        fieldNames,
-        &fieldTypes,
-        &fieldAttrs,
-    );
+test References {
+    const Foo = struct {
+        abc: u32,
+        def: []const u8,
+        foo: struct {
+            bar: f64,
+            baz: bool,
+        },
+    };
+    const ref: References(Foo) = .{};
+    const obj: Foo = .{
+        .abc = 42,
+        .def = "foobar",
+        .foo = .{
+            .bar = 3.14,
+            .baz = true,
+        },
+    };
+    // Terminal references i.e. not structs, have a convenience .resolve() method
+    try std.testing.expectEqual(42, ref.abc.resolve(obj));
+    try std.testing.expectEqual(3.14, ref.foo.bar.resolve(obj));
+    // Struct refs must be resolved using resolveStruct() or resolve() which handles all cases
+    try std.testing.expectEqualDeep(obj.foo, resolveStruct(ref.foo, obj));
+    try std.testing.expectEqualDeep(obj.foo, resolve(ref.foo, obj));
+    // To resolve any type of reference, use resolve()
+    try std.testing.expectEqualStrings("foobar", resolve(ref.def, obj));
 }

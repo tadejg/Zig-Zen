@@ -12,13 +12,17 @@ pub fn Config(comptime T: type) type {
             return .{ .value = try env.loadEnv(Spec, allocator), .isAlloc = true };
         }
 
-        pub fn loadEnvFile(allocator: std.mem.Allocator, envFileContent: []const u8) !Instance {
+        pub const LoadDotEnvError = error{};
+
+        pub fn loadDotEnv(allocator: std.mem.Allocator, envFileContent: []const u8) LoadDotEnvError!Instance {
             _ = allocator;
             _ = envFileContent;
             @compileError("Unimplemented");
         }
 
-        pub fn loadJson(allocator: std.mem.Allocator, json: []const u8) !Instance {
+        pub const LoadJsonError = error{};
+
+        pub fn loadJson(allocator: std.mem.Allocator, json: []const u8) LoadJsonError!Instance {
             _ = allocator;
             _ = json;
             @compileError("Unimplemented");
@@ -68,4 +72,14 @@ fn deinitValue(allocator: std.mem.Allocator, value: anytype) void {
         },
         else => {},
     }
+}
+
+test Config {
+    // Describe the shape
+    const Conf = Config(struct { abc: u32 });
+    // Load from your favorite source
+    var cfg = Conf.static(.{ .abc = 42 });
+    defer cfg.deinit(std.testing.allocator); // Required for some sources (optional for .static())
+    // Use the loaded values
+    try std.testing.expectEqual(42, cfg.value.abc);
 }

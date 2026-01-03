@@ -20,6 +20,8 @@
     - [Groups](#groups)
 <!--toc:end-->
 
+<hr/>
+
 ## Building
 
 ```

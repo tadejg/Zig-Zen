@@ -46,3 +46,24 @@ pub fn Group(comptime configs: anytype) type {
         };
     };
 }
+
+test Group {
+    const Config = @import("config.zig").Config;
+    const Conf1 = Config(struct { abc: u32 });
+    const Conf2 = Config(struct { def: f32 });
+    // Create a group type from the two config types, giving each a name ('one' and 'two')
+    const GroupConf = Group(.{
+        .one = Conf1,
+        .two = Conf2,
+    });
+    const cfg1 = Conf1.static(.{ .abc = 42 });
+    const cfg2 = Conf2.static(.{ .def = 3.14 });
+    // Merge the loaded config values into one object
+    const group = GroupConf.from(.{
+        .one = cfg1,
+        .two = cfg2,
+    });
+    // Use the values from the merged object or refs to the group
+    try std.testing.expectEqual(42, group.value.one.abc);
+    try std.testing.expectEqual(3.14, GroupConf.lazy.two.def.resolve(group.value));
+}

@@ -11,6 +11,12 @@ pub fn loadEnv(comptime Spec: type, allocator: std.mem.Allocator) LoadValueError
 
 pub const LoadValueError = std.process.GetEnvVarOwnedError || CoerceValueError;
 
+fn isAnyStr(comptime T: type) bool {
+    const typeInfo = @typeInfo(T);
+    if (typeInfo == .optional) return isAnyStr(typeInfo.optional.child);
+    return typeInfo == .pointer and typeInfo.pointer.size == .slice and typeInfo.pointer.child == u8;
+}
+
 fn loadValue(comptime T: type, comptime name: []const u8, allocator: std.mem.Allocator) LoadValueError!T {
     const typeInfo = @typeInfo(T);
     const value = std.process.getEnvVarOwned(allocator, name) catch |e| switch (e) {
@@ -20,6 +26,13 @@ fn loadValue(comptime T: type, comptime name: []const u8, allocator: std.mem.All
         },
         else => return e,
     };
+    defer if (isAnyStr(T)) {
+        if (typeInfo == .optional) {
+            if (value) |v| allocator.free(v);
+        } else {
+            allocator.free(value);
+        }
+    };
     return try coerceValue(T, value, allocator);
 }
 
@@ -27,7 +40,7 @@ pub const CoerceValueError = error{
     TooFewArrayElements,
     TooManyArrayElements,
     InvalidBool,
-} || std.fmt.ParseIntError || std.fmt.ParseFloatError;
+} || std.fmt.ParseIntError || std.fmt.ParseFloatError || std.mem.Allocator.Error;
 
 fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator) CoerceValueError!T {
     const typeInfo = @typeInfo(T);
@@ -60,7 +73,7 @@ fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator
             .slice => blk: {
                 // TODO Allow slices of u8 ints instead of strings
                 if (ptr.child == u8) { // Special case for strings
-                    break :blk value;
+                    break :blk try allocator.dupe(u8, value);
                 }
                 var list: std.ArrayList(ptr.child) = .empty;
                 defer list.deinit(allocator);

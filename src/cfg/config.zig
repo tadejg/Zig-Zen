@@ -2,9 +2,10 @@ const std = @import("std");
 const env = @import("env.zig");
 const ref = @import("reference.zig");
 
-pub fn Config(comptime Spec: type) type {
-    if (@typeInfo(Spec) != .@"struct") @compileError("Config spec must be a struct");
+pub fn Config(comptime T: type) type {
+    if (@typeInfo(T) != .@"struct") @compileError("Config spec must be a struct");
     return struct {
+        pub const Spec = T;
         pub const lazy: ref.References(Spec) = .{};
 
         pub fn loadEnv(allocator: std.mem.Allocator) env.LoadValueError!Instance {
@@ -23,7 +24,7 @@ pub fn Config(comptime Spec: type) type {
             @compileError("Unimplemented");
         }
 
-        pub fn static(value: Spec) !Instance {
+        pub fn static(value: Spec) Instance {
             return .{ .value = value, .isAlloc = false };
         }
 

@@ -168,7 +168,7 @@ const Config = zen.cfg.Config(struct {
 });
 // Configure components with lazy references to nested fields
 ... = Config.lazy.def.bar;
-// ...or pass the entire nested object (WIP CURRENTLY UNSUPPORTED)
+// ...or pass the entire nested object
 ... = Config.lazy.def;
 const json = "..."; // e.g. load this from a file
 var cfg = try Config.loadJson(json);

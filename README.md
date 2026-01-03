@@ -35,7 +35,7 @@ concurrent). At the core is the I/O reactor which listens for events and notifie
 
 ## API Documentation
 
-Zig API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev).
+Zen API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev).
 
 ## Quick Start
 

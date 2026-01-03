@@ -4,6 +4,22 @@
 
 <hr/>
 
+<!--toc:start-->
+- [Zen](#zen)
+  - [Building](#building)
+  - [Architecture](#architecture)
+  - [API Documentation](#api-documentation)
+  - [Quick Start](#quick-start)
+  - [Configuration](#configuration)
+    - [Value Coercion](#value-coercion)
+    - [Sources](#sources)
+      - [Static](#static)
+      - [System Environment](#system-environment)
+      - [Dotenv Format](#dotenv-format)
+      - [JSON](#json)
+    - [Groups](#groups)
+<!--toc:end-->
+
 ## Building
 
 ```

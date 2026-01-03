@@ -17,6 +17,10 @@ application starts with a `zen.App(.{})` spec which describes the servers, backg
 components which make up the application. The application can then be started with a runtime of choice (sync, async,
 concurrent). At the core is the I/O reactor which listens for events and notifies the appropriate consumer.
 
+## API Documentation
+
+Zig API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev).
+
 ## Quick Start
 
 ```zig

@@ -17,7 +17,7 @@ pub fn main() !void {
         .leak => log.err("Leak detected", .{}),
     };
     const allocator = gpa.allocator();
-    var threaded = std.Io.Threaded.init(allocator);
+    var threaded = std.Io.Threaded.init(allocator, .{});
     defer threaded.deinit();
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,

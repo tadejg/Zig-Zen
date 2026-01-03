@@ -49,4 +49,13 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    const docs_install_dir = b.addInstallDirectory(.{
+        .source_dir = mod_tests.getEmittedDocs(),
+        .install_subdir = "docs",
+        .install_dir = .prefix,
+    });
+
+    const docs_step = b.step("docs", "Generate API docs");
+    docs_step.dependOn(&docs_install_dir.step);
 }

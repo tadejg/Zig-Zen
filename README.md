@@ -175,3 +175,67 @@ var cfg = try Config.loadJson(json);
 defer cfg.deinit(allocator);
 std.debug.print("{d} {d}\n", .{ cfg.value.abc, cfg.value.def.baz });
 ```
+
+### Groups
+
+Sometimes, configuration is loaded from multiple sources, but the runtime accepts a single config. Multiple
+configurations may be merged into one using a `Group()`. The shape of the type returned by `Group()` is identical to the
+shape of a `Config()`, meaning groups can be merged as well.
+
+> **NOTE:** The group only performs a shallow copy of each config
+
+```zig
+const std = @import("std");
+const zen = @import("zen");
+
+const log = std.log.scoped(.main);
+const BUFF_LEN = 8 * 1024;
+const MAX_CONN = 128;
+
+var readBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
+var readBufferFreeStack = [_]u32{0} ** MAX_CONN;
+var writeBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
+var writeBufferFreeStack = [_]u32{0} ** MAX_CONN;
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer switch (gpa.deinit()) {
+        .ok => {},
+        .leak => log.err("Leak detected", .{}),
+    };
+    const allocator = gpa.allocator();
+    var threaded = std.Io.Threaded.init(allocator);
+    defer threaded.deinit();
+    // Create the default config and load it from the system environment
+    const Config = zen.cfg.Config(struct { TCP_BIND: []const u8 });
+    var cfg = try Config.loadEnv(allocator);
+    defer cfg.deinit(allocator);
+    // Create a static config for http buffers
+    const HttpBuffersConfig = zen.cfg.Config(zen.http.ClientBuffers);
+    const httpBuffersCfg = HttpBuffersConfig.static(.{
+        .readBuffer = .{ .data = &readBuffer, .freeStack = &readBufferFreeStack, .chunkSize = BUFF_LEN },
+        .writeBuffer = .{ .data = &writeBuffer, .freeStack = &writeBufferFreeStack, .chunkSize = BUFF_LEN },
+    });
+    // Create a combined type of the two configs, assigning a name to each
+    const ConfigGroup = zen.cfg.Group(.{
+        .default = Config,
+        .http = HttpBuffersConfig,
+    });
+    // Use the combined type to merge the two loaded configs at runtime
+    const groupCfg = ConfigGroup.from(.{
+        .default = &cfg,
+        .http = &httpBuffersCfg,
+    });
+    const App = zen.App(.{
+        .servers = .{
+            zen.http.Server(.{
+                // Configure your app using lazy references to the group config
+                .listen = ConfigGroup.lazy.default.TCP_BIND,
+                .buffers = ConfigGroup.lazy.http,
+            }),
+        },
+    });
+    // Start the app using the group config
+    try zen.run.sync(App, threaded.io(), groupCfg);
+}
+```

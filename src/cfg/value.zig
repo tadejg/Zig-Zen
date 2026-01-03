@@ -6,7 +6,7 @@ pub const CoerceValueError = error{
     InvalidBool,
 } || std.fmt.ParseIntError || std.fmt.ParseFloatError || std.mem.Allocator.Error;
 
-fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator) CoerceValueError!T {
+pub fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator) CoerceValueError!T {
     const typeInfo = @typeInfo(T);
     return switch (typeInfo) {
         .int => std.fmt.parseInt(T, value, 10),
@@ -61,7 +61,7 @@ fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator
     };
 }
 
-fn freeValue(allocator: std.mem.Allocator, value: anytype) void {
+pub fn freeValue(allocator: std.mem.Allocator, value: anytype) void {
     const ValueType = @TypeOf(value);
     switch (@typeInfo(ValueType)) {
         .pointer => |ptr| switch (ptr.size) {

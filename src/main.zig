@@ -9,6 +9,7 @@ var readBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
 var readBufferFreeStack = [_]u32{0} ** MAX_CONN;
 var writeBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
 var writeBufferFreeStack = [_]u32{0} ** MAX_CONN;
+var connectionPool = [_]zen.http.server.Connection{undefined} ** MAX_CONN;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
@@ -24,10 +25,16 @@ pub fn main() !void {
     });
     var cfg = try Config.loadEnv(allocator);
     defer cfg.deinit(allocator);
-    const HttpBuffersConfig = zen.cfg.Config(zen.http.ClientBuffers);
+    const HttpBuffersConfig = zen.cfg.Config(struct {
+        buffers: zen.http.server.ClientBuffers,
+        connectionPool: []zen.http.server.Connection,
+    });
     const httpBuffersCfg = HttpBuffersConfig.static(.{
-        .readBuffer = .{ .data = &readBuffer, .freeStack = &readBufferFreeStack, .chunkSize = BUFF_LEN },
-        .writeBuffer = .{ .data = &writeBuffer, .freeStack = &writeBufferFreeStack, .chunkSize = BUFF_LEN },
+        .buffers = .{
+            .readBuffer = .{ .data = &readBuffer, .freeStack = &readBufferFreeStack, .chunkSize = BUFF_LEN },
+            .writeBuffer = .{ .data = &writeBuffer, .freeStack = &writeBufferFreeStack, .chunkSize = BUFF_LEN },
+        },
+        .connectionPool = &connectionPool,
     });
     const ConfigGroup = zen.cfg.Group(.{
         .default = Config,
@@ -40,9 +47,9 @@ pub fn main() !void {
     const App = zen.App(.{
         .servers = .{
             zen.http.Server(.{
-                // .listen = "127.0.0.1:1355",
                 .listen = ConfigGroup.lazy.default.TCP_BIND,
-                .buffers = ConfigGroup.lazy.http,
+                .buffers = ConfigGroup.lazy.http.buffers,
+                .connectionPool = ConfigGroup.lazy.http.connectionPool,
             }),
         },
     });

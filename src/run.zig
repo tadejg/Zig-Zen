@@ -23,9 +23,8 @@ pub fn sync(comptime App: type, io: std.Io, config: anytype) !void {
         if (i < numStarted) v.stop(&reactor); // Avoid undefined instances
     };
     inline for (App.Spec.servers, 0..) |s, i| {
-        try s.start(&instances[i], config, &reactor);
+        try s.start(io, &instances[i], config, &reactor);
         numStarted += 1;
     }
     reactor.run();
-    _ = io;
 }

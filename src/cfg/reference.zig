@@ -14,7 +14,7 @@ pub fn Reference(comptime T: type, comptime ref: []const []const u8) type {
     };
 }
 
-fn StructReference(comptime T: type, refStack: []const []const u8) type {
+pub fn StructReference(comptime T: type, refStack: []const []const u8) type {
     const fields = std.meta.fields(T);
     const numFields = fields.len + 2; // Extra fields to store metadata needed to resolve the entire struct as a ref
     comptime var fieldNames: []const []const u8 = &.{ "__struct_ref", "__struct_type" };

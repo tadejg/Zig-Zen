@@ -10,7 +10,7 @@ pub fn Server(comptime spec: anytype) type {
         pub const Spec = spec;
 
         /// The instance needs a stable pointer as it registers it with the reactor for event notifications
-        pub fn start(instance: *Instance, config: anytype, reactor: *zio.Reactor) Instance.InitError!void {
+        pub fn start(_: std.Io, instance: *Instance, config: anytype, reactor: *zio.Reactor) Instance.InitError!void {
             const listen = cfg.ref.resolveIfRef(spec.listen, config.value);
             try instance.init(.{ .listen = listen, .reactor = reactor });
         }
@@ -44,7 +44,7 @@ pub fn Server(comptime spec: anytype) type {
                 if (it.next() != null) return error.MalformedUri;
                 const port = try std.fmt.parseInt(u16, portStr.?, 10);
                 const ip = std.Io.net.IpAddress.parse(host.?, port) catch return error.InvalidHost;
-                self.* = .{ .socket = try zio.Socket.init() };
+                self.* = .{ .socket = try zio.Socket.init(std.meta.activeTag(ip)) };
                 errdefer self.socket.deinit();
                 try self.socket.bind(&ip);
                 try self.socket.listen(128); // TODO configurable backlog
@@ -64,39 +64,12 @@ pub fn Server(comptime spec: anytype) type {
                 self.handleConnectionExtra = extra;
             }
 
-            fn acceptClient(self: *Self) !void {
-                var addr: std.posix.sockaddr.storage = undefined;
-                var addrSize: u32 = @sizeOf(@TypeOf(addr));
-                const clientSocket = try std.posix.accept(
-                    self.socket.fd,
-                    @ptrCast(@alignCast(&addr)),
-                    &addrSize,
-                    std.posix.SOCK.NONBLOCK,
-                );
-                std.debug.assert(addrSize <= @sizeOf(@TypeOf(addr)));
+            const AcceptClientError = zio.Socket.AcceptError;
+
+            fn acceptClient(self: *Self) AcceptClientError!void {
                 var ip: std.Io.net.IpAddress = undefined;
-                switch (addrSize) {
-                    @sizeOf(std.posix.sockaddr.in) => {
-                        const in: *std.posix.sockaddr.in = @ptrCast(@alignCast(&addr));
-                        std.debug.assert(in.family == std.posix.AF.INET);
-                        ip = std.Io.net.IpAddress{ .ip4 = .{
-                            .bytes = std.mem.toBytes(in.addr),
-                            .port = std.mem.bigToNative(u16, in.port),
-                        } };
-                    },
-                    @sizeOf(std.posix.sockaddr.in6) => {
-                        const in: *std.posix.sockaddr.in6 = @ptrCast(@alignCast(&addr));
-                        std.debug.assert(in.family == std.posix.AF.INET6);
-                        ip = std.Io.net.IpAddress{ .ip6 = .{
-                            .bytes = in.addr,
-                            .interface = .{ .index = in.scope_id },
-                            .flow = in.flowinfo,
-                            .port = std.mem.bigToNative(u16, in.port),
-                        } };
-                    },
-                    else => unreachable,
-                }
-                spec.handleConnection(self.handleConnectionExtra, .{ .fd = clientSocket }, ip);
+                const clientSocket = try self.socket.accept(&ip);
+                spec.handleConnection(self.handleConnectionExtra, clientSocket, ip);
             }
 
             fn handleSocketEvent(extra: ?*anyopaque, event: zio.Reactor.Handler.Event) void {

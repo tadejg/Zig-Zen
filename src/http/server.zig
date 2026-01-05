@@ -3,6 +3,7 @@ const zio = @import("../zio/root.zig");
 const cfg = @import("../cfg/root.zig");
 const tcp = @import("../tcp/root.zig");
 const Request = @import("request.zig");
+const RequestParser = @import("request_parser.zig");
 
 pub const ClientBuffers = struct {
     readBuffer: Buffer,
@@ -26,6 +27,7 @@ pub const Connection = struct {
     server: *anyopaque,
     node: std.SinglyLinkedList.Node = .{},
     req: Request = .{},
+    reqParser: RequestParser = .init,
 };
 
 pub fn Server(comptime spec: anytype) type {
@@ -114,7 +116,7 @@ pub fn Server(comptime spec: anytype) type {
 
             const AcceptConnectionError = error{
                 ConnectionLimitReached,
-            } || zio.FixedBufferPool.AllocError || zio.Reactor.AddSocketError;
+            } || zio.FixedBufferPool.AllocError || zio.Reactor.AddSocketError || HandleReadError;
 
             fn acceptConnection(self: *Self, socket: zio.Socket, ip: std.Io.net.IpAddress) AcceptConnectionError!void {
                 var s = socket;
@@ -137,7 +139,9 @@ pub fn Server(comptime spec: anytype) type {
                 conn.writeBufferStart = 0;
                 conn.writeBufferEnd = 0;
                 conn.req = .{};
+                conn.reqParser = .init;
                 try self.reactor.addSocket(socket, &conn.handler);
+                try self.handleRead(conn);
             }
 
             fn closeConnection(self: *Self, conn: *Connection) void {
@@ -157,7 +161,7 @@ pub fn Server(comptime spec: anytype) type {
                 };
             }
 
-            const HandleReadError = error{EndOfFile} || zio.Socket.ReadError;
+            const HandleReadError = error{EndOfFile} || RequestParser.UpdateError || zio.Socket.ReadError;
 
             fn handleRead(_: *Self, conn: *Connection) HandleReadError!void {
                 loop: while (true) {
@@ -166,7 +170,11 @@ pub fn Server(comptime spec: anytype) type {
                         else => return e,
                     };
                     if (read == 0) return error.EndOfFile;
-                    // TODO Update parser
+                    try conn.reqParser.update(&conn.req, conn.readBuffer[0..read]);
+                    if (conn.reqParser.isDone()) {
+                        // TODO Call request handler and switch into write mode
+                        std.log.info("Request parsed: {s} -> {s}", .{ conn.req.rawMethod, conn.req.path });
+                    }
                 }
             }
 

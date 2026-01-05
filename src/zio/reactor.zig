@@ -59,7 +59,6 @@ pub fn run(self: *Self) void {
     while (running) {
         const events = self.epoll.wait(-1);
         for (events) |event| {
-            std.log.info("EVENT events={d}", .{event.events});
             if (event.data.ptr == Epoll.NOTIFY_SIGNAL_PTR) {
                 running = false;
             } else {

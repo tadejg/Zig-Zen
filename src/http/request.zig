@@ -29,6 +29,6 @@ pub const Method = enum {
 
 method: Method = .unknown,
 _rawMethod: [MAX_METHOD_LEN]u8 = .{0} ** MAX_METHOD_LEN,
-rawMethod: []u8 = undefined,
+rawMethod: []u8 = "",
 _path: [MAX_PATH_LEN]u8 = .{0} ** MAX_PATH_LEN,
-path: []u8 = undefined,
+path: []u8 = "",

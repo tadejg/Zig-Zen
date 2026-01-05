@@ -14,7 +14,7 @@ pub fn init(family: std.meta.Tag(std.Io.net.IpAddress)) InitError!Self {
         .ip4 => std.posix.AF.INET,
         .ip6 => std.posix.AF.INET6,
     };
-    const fd = try std.posix.socket(f, std.posix.SOCK.STREAM, 0);
+    const fd = try std.posix.socket(f, std.posix.SOCK.STREAM | std.posix.SOCK.NONBLOCK, 0);
     return .{ .fd = fd };
 }
 
@@ -34,7 +34,7 @@ pub inline fn isValid(self: *Self) bool {
     return self.fd >= 0;
 }
 
-pub const BindError = InitError || std.posix.BindError;
+pub const BindError = InitError || std.posix.BindError || std.posix.SetSockOptError;
 
 pub fn bind(self: *Self, ip: *const net.IpAddress) BindError!void {
     var in: std.posix.sockaddr.in = undefined;
@@ -59,6 +59,18 @@ pub fn bind(self: *Self, ip: *const net.IpAddress) BindError!void {
         },
     }
     if (!self.isValid()) self.* = try init(ip.*);
+    try std.posix.setsockopt(
+        self.fd,
+        std.posix.SOL.SOCKET,
+        std.posix.SO.REUSEADDR,
+        &std.mem.toBytes(@as(c_int, 1)),
+    );
+    try std.posix.setsockopt(
+        self.fd,
+        std.posix.SOL.SOCKET,
+        std.posix.SO.REUSEPORT,
+        &std.mem.toBytes(@as(c_int, 1)),
+    );
     try std.posix.bind(self.fd, sockaddr, @sizeOf(std.posix.sockaddr));
 }
 

@@ -55,6 +55,7 @@ pub const init: Self = .{};
 pub const UpdateError = error{MalformedUri};
 
 pub fn update(self: *Self, byte: u8, buff: []u8, out: *[]u8) UpdateError!void {
+    if (buff.len == out.len) return error.MalformedUri;
     buff[out.len] = byte;
     out.* = buff[0 .. out.len + 1];
     switch (self.state) {

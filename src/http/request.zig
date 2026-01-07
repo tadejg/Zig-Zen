@@ -3,7 +3,7 @@ const Connection = @import("connection.zig");
 /// RFC doesn't impose a limit, but recommends less than 2048 as this is the limit in most practical cases
 /// https://stackoverflow.com/a/417184
 pub const MAX_PATH_LEN = 2048;
-/// RPC doesn't impose a limit, but in practice, we don't often see them longer than 16 bytes
+/// RFC doesn't impose a limit, but in practice, we don't often see them longer than 16 bytes
 pub const MAX_METHOD_LEN = 16;
 pub const Method = enum {
     GET,

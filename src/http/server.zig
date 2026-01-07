@@ -152,7 +152,10 @@ pub fn Server(comptime spec: anytype) type {
                 };
             }
 
-            const HandleReadError = error{EndOfFile} || RequestParser.UpdateError || zio.Socket.ReadError;
+            const HandleReadError = error{
+                RequestHandlerFailed,
+                EndOfFile,
+            } || RequestParser.UpdateError || zio.Socket.ReadError;
 
             fn handleRead(_: *Self, conn: *Connection) HandleReadError!void {
                 loop: while (true) {
@@ -164,6 +167,11 @@ pub fn Server(comptime spec: anytype) type {
                     try conn.reqParser.update(&conn.req, conn.readBuffer[0..read]);
                     if (conn.reqParser.isDone()) {
                         // TODO Call request handler and switch into write mode
+                        const res = spec.handleRequest(&conn.req) catch {
+                            // TODO Log err
+                            return error.RequestHandlerFailed;
+                        };
+                        _ = res; // TODO serialize
                         std.log.info("Request parsed: {s} -> {s}", .{ conn.req.rawMethod, conn.req.path });
                     }
                 }

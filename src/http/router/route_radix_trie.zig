@@ -19,7 +19,6 @@
 //! /foo/*/bar/*
 //! ```
 const std = @import("std");
-const Route = @import("route.zig");
 
 pub const WILDCARD_CHAR = '*';
 pub const PARAM_MARKER = ':';
@@ -53,11 +52,16 @@ pub const WildcardMode = enum {
     zeroOrMore,
 };
 
-pub fn RouteRadixTrie(comptime routes: []const Route, comptime _wildcardMode: WildcardMode) type {
+pub const RouteSpec = struct {
+    pattern: []const u8,
+    target: *const anyopaque,
+};
+
+pub fn RouteRadixTrie(comptime routes: []const RouteSpec, comptime _wildcardMode: WildcardMode) type {
     comptime var _root: Node = .root;
     inline for (routes) |*r| comptime addRoute(&_root, r);
     return struct {
-        const root: *const Node = &_root;
+        const root: Node = _root;
         pub const wildcardMode = _wildcardMode;
 
         pub fn match(path: []const u8) ?*const anyopaque {
@@ -68,6 +72,8 @@ pub fn RouteRadixTrie(comptime routes: []const Route, comptime _wildcardMode: Wi
 }
 
 fn matchPath(comptime wildcardMode: WildcardMode, comptime node: *const Node, path: []const u8) ?*const anyopaque {
+    // Special case for root pattern
+    if (path.len == 0) return node.target;
     inline for (node.children) |child| {
         switch (child.type) {
             .static => {
@@ -75,7 +81,9 @@ fn matchPath(comptime wildcardMode: WildcardMode, comptime node: *const Node, pa
                 const childEndsWithPathSep = childHasLen and child.value[child.value.len - 1] == PATH_SEPARATOR;
                 const maybeWildcard = childHasLen and std.mem.eql(u8, child.value[0 .. child.value.len - 1], path);
                 if (wildcardMode == .zeroOrMore and childEndsWithPathSep and maybeWildcard) {
-                    return matchPath(wildcardMode, child, "");
+                    // \r has no special meaning. It's there to prevent the remaining slice from reaching len of 0,
+                    // triggering root path special case
+                    return matchPath(wildcardMode, child, "\t");
                 }
                 if (std.mem.startsWith(u8, path, child.value)) {
                     const remainingPath = path[child.value.len..];
@@ -214,9 +222,9 @@ fn normalize(value: []const u8) []const u8 {
     return std.mem.trim(u8, value, &(std.ascii.whitespace ++ .{PATH_SEPARATOR}));
 }
 
-fn addRoute(comptime root: *Node, comptime route: *const Route) void {
+fn addRoute(comptime root: *Node, comptime route: *const RouteSpec) void {
     const normalizedPattern = normalize(route.pattern);
-    insert(root, normalizedPattern, @ptrCast(@alignCast(route.handler))) catch |e| switch (e) {
+    insert(root, normalizedPattern, @ptrCast(@alignCast(route.target))) catch |e| switch (e) {
         error.Duplicate => @compileError("Duplicate route pattern: \"" ++ route.pattern ++ "\""),
         error.Unsupported => @compileError("Unsupported route pattern: \"" ++ route.pattern ++ "\""),
     };
@@ -288,10 +296,9 @@ test addRoute {
             return .{ .statusCode = .ok };
         }
     }.handler;
-    comptime addRoute(&root, &Route{
-        .method = .unknown,
+    comptime addRoute(&root, &RouteSpec{
         .pattern = "/foo/bar",
-        .handler = barHandler,
+        .target = barHandler,
     });
     try std.testing.expectEqual(1, root.children.len);
     try std.testing.expectEqualStrings("foo/bar", root.children[0].value);
@@ -314,10 +321,9 @@ test addRoute {
             return .{ .statusCode = .ok };
         }
     }.handler;
-    comptime addRoute(&root, &Route{
-        .method = .unknown,
+    comptime addRoute(&root, &RouteSpec{
         .pattern = "/foo/baz",
-        .handler = bazHandler,
+        .target = bazHandler,
     });
     try comptime expectTrie(&.{
         .type = .static,
@@ -724,6 +730,14 @@ test "should reject a pattern with a duplicate wildcard" {
     try comptime insert(&root, "foo/*", @ptrCast(@alignCast(FOOBAR_TARGET)));
     const err = comptime insert(&root, "foo/*", @ptrCast(@alignCast(FOOBAR_TARGET)));
     try std.testing.expectError(error.Duplicate, err);
+}
+
+test "should match root pattern" {
+    const FOOBAR_TARGET: *const [6]u8 = "foobar";
+    comptime var root: Node = .root;
+    try comptime insert(&root, "", @ptrCast(@alignCast(FOOBAR_TARGET)));
+    const target = comptime matchPath(.oneOrMore, &root, "");
+    try std.testing.expectEqual(@as(?*const anyopaque, @ptrCast(@alignCast(FOOBAR_TARGET))), target);
 }
 
 test "should match a static pattern" {

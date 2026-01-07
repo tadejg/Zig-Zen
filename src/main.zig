@@ -3,17 +3,18 @@ const zen = @import("zen");
 
 const log = std.log.scoped(.main);
 const routes = [_]zen.http.router.Route{
-    .{ .method = .GET, .pattern = "/", .handler = index },
-    .{ .method = .POST, .pattern = "/", .handler = post },
+    .{ .pattern = "/", .handlers = .{ .GET = index, .POST = post } },
 };
 
 fn index(req: *const zen.http.Request) !zen.http.Response {
     _ = req;
+    std.log.info("INDEX", .{});
     return .{ .statusCode = .ok };
 }
 
 fn post(req: *const zen.http.Request) !zen.http.Response {
     _ = req;
+    std.log.info("POST", .{});
     return .{ .statusCode = .ok };
 }
 
@@ -41,7 +42,7 @@ pub fn main() !void {
     });
     const Router = zen.http.router.ParamRouter(.{
         .routes = routes,
-    });
+    }, .oneOrMore);
     const App = zen.App(.{
         .servers = .{
             zen.http.Server(.{

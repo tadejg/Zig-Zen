@@ -1,4 +1,9 @@
 pub const Config = @import("config.zig").Config;
+pub const loadEnv = @import("config.zig").loadEnv;
+pub const loadDotEnv = @import("config.zig").loadDotEnv;
+pub const loadJson = @import("config.zig").loadJson;
+pub const static = @import("config.zig").static;
+pub const deinit = @import("config.zig").deinit;
 pub const Group = @import("group.zig").Group;
 pub const ref = @import("reference.zig");
 pub const env = @import("env.zig");

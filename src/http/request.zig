@@ -1,4 +1,5 @@
 const std = @import("std");
+const Connection = @import("connection.zig");
 /// RFC doesn't impose a limit, but recommends less than 2048 as this is the limit in most practical cases
 /// https://stackoverflow.com/a/417184
 pub const MAX_PATH_LEN = 2048;
@@ -27,6 +28,8 @@ pub const Method = enum {
     }
 };
 
+/// Exposed connection to support more advanced use cases and e.g. access the client IP
+connection: *Connection,
 method: Method = .unknown,
 _rawMethod: [MAX_METHOD_LEN]u8 = .{0} ** MAX_METHOD_LEN,
 rawMethod: []u8 = "",

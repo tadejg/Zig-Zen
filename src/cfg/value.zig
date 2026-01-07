@@ -4,6 +4,8 @@ pub const CoerceValueError = error{
     TooFewArrayElements,
     TooManyArrayElements,
     InvalidBool,
+    UnsupportedPointerSize,
+    UnsupportedFieldType,
 } || std.fmt.ParseIntError || std.fmt.ParseFloatError || std.mem.Allocator.Error;
 
 pub fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Allocator) CoerceValueError!T {
@@ -55,9 +57,9 @@ pub fn coerceValue(comptime T: type, value: []const u8, allocator: std.mem.Alloc
                 }
                 break :blk list.toOwnedSlice(allocator);
             },
-            else => @compileError("Unsupported Spec field pointer size " ++ @tagName(ptr.size)),
+            else => return error.UnsupportedPointerSize,
         },
-        else => @compileError("Unsupported Spec field type " ++ @typeName(T)),
+        else => return error.UnsupportedFieldType,
     };
 }
 
@@ -69,7 +71,7 @@ pub fn freeValue(allocator: std.mem.Allocator, value: anytype) void {
                 for (value) |v| freeValue(allocator, v);
                 allocator.free(value);
             },
-            else => @compileError("Unsupported value pointer size " ++ @tagName(ptr.size)),
+            else => {},
         },
         else => {},
     }

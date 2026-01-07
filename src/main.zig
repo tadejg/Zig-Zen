@@ -2,47 +2,45 @@ const std = @import("std");
 const zen = @import("zen");
 
 const log = std.log.scoped(.main);
-const BUFF_LEN = 8 * 1024;
-const MAX_CONN = 128;
+const routes = [_]zen.http.router.Route{
+    .{ .method = .GET, .pattern = "/", .handler = index },
+    .{ .method = .POST, .pattern = "/", .handler = post },
+};
 
-var readBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
-var readBufferFreeStack = [_]u32{0} ** MAX_CONN;
-var writeBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
-var writeBufferFreeStack = [_]u32{0} ** MAX_CONN;
-var connectionPool = [_]zen.http.server.Connection{undefined} ** MAX_CONN;
+fn index(req: *const zen.http.Request) !zen.http.Response {
+    _ = req;
+    return .{ .statusCode = .ok };
+}
+
+fn post(req: *const zen.http.Request) !zen.http.Response {
+    _ = req;
+    return .{ .statusCode = .ok };
+}
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
     defer switch (gpa.deinit()) {
         .ok => {},
         .leak => log.err("Leak detected", .{}),
     };
     const allocator = gpa.allocator();
-    var threaded = std.Io.Threaded.init(allocator, .{});
+    var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,
     });
-    var cfg = try Config.loadEnv(allocator);
-    defer cfg.deinit(allocator);
-    const HttpBuffersConfig = zen.cfg.Config(struct {
-        buffers: zen.http.server.ClientBuffers,
-        connectionPool: []zen.http.server.Connection,
-    });
-    const httpBuffersCfg = HttpBuffersConfig.static(.{
-        .buffers = .{
-            .readBuffer = .{ .data = &readBuffer, .freeStack = &readBufferFreeStack, .chunkSize = BUFF_LEN },
-            .writeBuffer = .{ .data = &writeBuffer, .freeStack = &writeBufferFreeStack, .chunkSize = BUFF_LEN },
-        },
-        .connectionPool = &connectionPool,
-    });
+    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    defer zen.cfg.deinit(Config, allocator, cfg);
     const ConfigGroup = zen.cfg.Group(.{
         .default = Config,
-        .http = HttpBuffersConfig,
+        .http = zen.http.server.DefaultConfig,
     });
     const groupCfg = ConfigGroup.from(.{
         .default = &cfg,
-        .http = &httpBuffersCfg,
+        .http = &zen.http.server.defaultCfg,
+    });
+    const Router = zen.http.router.ParamRouter(.{
+        .routes = routes,
     });
     const App = zen.App(.{
         .servers = .{
@@ -50,6 +48,7 @@ pub fn main() !void {
                 .listen = ConfigGroup.lazy.default.TCP_BIND,
                 .buffers = ConfigGroup.lazy.http.buffers,
                 .connectionPool = ConfigGroup.lazy.http.connectionPool,
+                .handleRequest = Router.handleRequest,
             }),
         },
     });

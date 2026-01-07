@@ -49,6 +49,7 @@ pub fn Group(comptime configs: anytype) type {
 
 test Group {
     const Config = @import("config.zig").Config;
+    const static = @import("config.zig").static;
     const Conf1 = Config(struct { abc: u32 });
     const Conf2 = Config(struct { def: f32 });
     // Create a group type from the two config types, giving each a name ('one' and 'two')
@@ -56,8 +57,8 @@ test Group {
         .one = Conf1,
         .two = Conf2,
     });
-    const cfg1 = Conf1.static(.{ .abc = 42 });
-    const cfg2 = Conf2.static(.{ .def = 3.14 });
+    const cfg1 = static(Conf1, .{ .abc = 42 });
+    const cfg2 = static(Conf2, .{ .def = 3.14 });
     // Merge the loaded config values into one object
     const group = GroupConf.from(.{
         .one = cfg1,

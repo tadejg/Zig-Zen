@@ -218,6 +218,7 @@ pub fn update(self: *Self, byte: u8, buff: []u8, out: *[]u8) UpdateError!void {
             }
             self.escapeIdx += 1;
             if (self.escapeIdx == 2) {
+                self.escapeIdx = 0;
                 self.state = self.prevState;
             }
         },

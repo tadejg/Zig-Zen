@@ -22,10 +22,31 @@
 
 <hr/>
 
+## Usage
+
+Add Zen as a dependency:
+
+```bash
+zig fetch --save git+https://gitlab.com/tadej3/zig-zen.git
+```
+
+Link against Zen in your `build.zig`:
+
+```zig
+const zen = b.dependency("zen", .{ .target = target, .optimize = optimize });
+mod.addImport("zen", zen.module("zen"));
+```
+
 ## Building
 
-```
+```bash
 zig build
+```
+
+## Testing
+
+```bash
+zig build test
 ```
 
 ## Architecture
@@ -37,7 +58,7 @@ concurrent). At the core is the I/O reactor which listens for events and notifie
 
 ## API Documentation
 
-Zen API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev).
+Zen API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev) or built using `zig build docs`.
 
 ## Quick Start
 
@@ -195,7 +216,7 @@ const Config = zen.cfg.Config(struct {
 const json = "..."; // e.g. load this from a file
 var cfg = try Config.loadJson(json);
 defer cfg.deinit(allocator);
-std.debug.print("{d} {d}\n", .{ cfg.value.abc, cfg.value.def.baz });
+std.debug.print("{d} {s}\n", .{ cfg.value.abc, cfg.value.def.baz });
 ```
 
 ### Groups

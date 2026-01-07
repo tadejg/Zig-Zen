@@ -2,8 +2,12 @@ const std = @import("std");
 const zio = @import("../zio/root.zig");
 const cfg = @import("../cfg/root.zig");
 const tcp = @import("../tcp/root.zig");
+const Connection = @import("connection.zig");
 const Request = @import("request.zig");
+const Response = @import("response.zig");
 const RequestParser = @import("request_parser.zig");
+
+pub const RequestHandler = *const fn (req: *const Request) anyerror!Response;
 
 pub const ClientBuffers = struct {
     readBuffer: Buffer,
@@ -14,20 +18,6 @@ pub const ClientBuffers = struct {
         freeStack: []u32,
         chunkSize: u32,
     };
-};
-
-pub const Connection = struct {
-    socket: zio.Socket,
-    ip: std.Io.net.IpAddress,
-    readBuffer: []u8,
-    writeBuffer: []u8,
-    writeBufferStart: usize = 0,
-    writeBufferEnd: usize = 0,
-    handler: zio.Reactor.Handler,
-    server: *anyopaque,
-    node: std.SinglyLinkedList.Node = .{},
-    req: Request = .{},
-    reqParser: RequestParser = .init,
 };
 
 pub fn Server(comptime spec: anytype) type {
@@ -100,6 +90,7 @@ pub fn Server(comptime spec: anytype) type {
                         .writeBuffer = undefined,
                         .handler = .{ .extra = c, .callback = handleSocketEvent },
                         .server = self,
+                        .req = .{ .connection = c },
                     };
                     self.freeConnectionList.prepend(&c.node);
                 }
@@ -138,7 +129,7 @@ pub fn Server(comptime spec: anytype) type {
                 conn.writeBuffer = writeBuffer;
                 conn.writeBufferStart = 0;
                 conn.writeBufferEnd = 0;
-                conn.req = .{};
+                conn.req = .{ .connection = conn };
                 conn.reqParser = .init;
                 try self.reactor.addSocket(socket, &conn.handler);
                 try self.handleRead(conn);

@@ -83,8 +83,8 @@ pub fn main() !void {
         TCP_BIND: []const u8,
     });
     // Load the configuration from your preferred source (env, dotenv file, json, ...)
-    var cfg = try Config.loadEnv(allocator);
-    defer cfg.deinit(allocator);
+    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    defer zen.cfg.deinit(Config, allocator, cfg);
     // Describe the application
     const App = zen.App(.{
         .servers = .{
@@ -121,8 +121,8 @@ zen.tcp.Server(.{ .listen = Config.lazy.STRING })
 After describing the configuration shape, load it from your favorite source.
 
 ```zig
-var cfg = try Config.loadEnv(allocator);
-defer cfg.deinit(allocator);
+var cfg = try zen.cfg.loadEnv(Config, allocator);
+defer zen.cfg.deinit(Config, allocator, cfg);
 // Access the loaded values
 cfg.value.STRING;
 cfg.value.NUMBER;
@@ -155,8 +155,8 @@ completely optional, but not invalid.
 const Config = zen.cfg.Config(struct {
     abc: []const u8,
 });
-var cfg = Config.static(.{ .abc = "hello" });
-defer cfg.deinit(allocator); // Optional
+var cfg = zen.cfg.static(Config, .{ .abc = "hello" });
+defer zen.cfg.deinit(Config, allocator, cfg); // Optional
 std.debug.print("{s}\n", .{ cfg.value.abc });
 ```
 
@@ -171,8 +171,8 @@ names are matched against environment variable names and values are coerced to t
 const Config = zen.cfg.Config(struct {
     PWD: []const u8,
 });
-var cfg = try Config.loadEnv(allocator);
-defer cfg.deinit(allocator);
+var cfg = try zen.cfg.loadEnv(Config, allocator);
+defer zen.cfg.deinit(Config, allocator, cfg);
 std.debug.print("{s}\n", .{ cfg.value.PWD });
 ```
 
@@ -195,8 +195,8 @@ const Config = zen.cfg.Config(struct {
     DEF: []const u8,
 });
 const dotenv = "..."; // e.g. load this from a file
-var cfg = try Config.loadDotEnv(dotenv);
-defer cfg.deinit(allocator);
+var cfg = try zen.cfg.loadDotEnv(Config, dotenv);
+defer zen.cfg.deinit(Config, allocator, cfg);
 std.debug.print("{d} {s}\n", .{ cfg.value.ABC, cfg.value.DEF });
 ```
 
@@ -214,8 +214,8 @@ const Config = zen.cfg.Config(struct {
 // ...or pass the entire nested object
 ... = Config.lazy.def;
 const json = "..."; // e.g. load this from a file
-var cfg = try Config.loadJson(json);
-defer cfg.deinit(allocator);
+var cfg = try zen.cfg.loadJson(Config, json);
+defer zen.cfg.deinit(Config, allocator, cfg);
 std.debug.print("{d} {s}\n", .{ cfg.value.abc, cfg.value.def.baz });
 ```
 
@@ -251,8 +251,8 @@ pub fn main() !void {
     defer threaded.deinit();
     // Create the default config and load it from the system environment
     const Config = zen.cfg.Config(struct { TCP_BIND: []const u8 });
-    var cfg = try Config.loadEnv(allocator);
-    defer cfg.deinit(allocator);
+    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    defer zen.cfg.deinit(Config, allocator, cfg);
     // Create a static config for http buffers
     const HttpBuffersConfig = zen.cfg.Config(zen.http.ClientBuffers);
     const httpBuffersCfg = HttpBuffersConfig.static(.{

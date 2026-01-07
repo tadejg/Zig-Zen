@@ -18,4 +18,4 @@ create-pages:
 test:
   stage: test
   script:
-    - ./$ZIG_VERSION/zig build test
+    - ./$ZIG_VERSION/zig build test --summary all

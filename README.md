@@ -6,7 +6,9 @@
 
 <!--toc:start-->
 - [Zen](#zen)
+  - [Usage](#usage)
   - [Building](#building)
+  - [Testing](#testing)
   - [Architecture](#architecture)
   - [API Documentation](#api-documentation)
   - [Quick Start](#quick-start)

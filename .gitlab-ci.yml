@@ -1,15 +1,21 @@
 image: ubuntu:24.04
+variables:
+  ZIG_VERSION: zig-x86_64-linux-0.16.0-dev.1859+212968c57
+before_script:
+  - apt update && apt install -y xz-utils wget
+  - wget
+    https://ziglang.org/builds/$ZIG_VERSION.tar.xz
+  - tar -xf $ZIG_VERSION.tar.xz
+
 create-pages:
   pages:
     publish: zig-out/docs
   rules:
     - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
-  variables:
-    ZIG_VERSION: zig-x86_64-linux-0.16.0-dev.1859+212968c57
-  before_script:
-    - apt update && apt install -y apt-transport-https xz-utils wget
-    - wget
-      https://ziglang.org/builds/$ZIG_VERSION.tar.xz
-    - tar -xf $ZIG_VERSION.tar.xz
   script:
     - ./$ZIG_VERSION/zig build docs
+
+test:
+  stage: test
+  script:
+    - ./$ZIG_VERSION/zig build test

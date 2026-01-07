@@ -83,7 +83,7 @@ fn matchPath(comptime wildcardMode: WildcardMode, comptime node: *const Node, pa
                 if (wildcardMode == .zeroOrMore and childEndsWithPathSep and maybeWildcard) {
                     // \r has no special meaning. It's there to prevent the remaining slice from reaching len of 0,
                     // triggering root path special case
-                    return matchPath(wildcardMode, child, "\t");
+                    return matchPath(wildcardMode, child, "\r");
                 }
                 if (std.mem.startsWith(u8, path, child.value)) {
                     const remainingPath = path[child.value.len..];

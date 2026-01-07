@@ -133,7 +133,7 @@ cfg.value.ARRAY;
 ### Value Coercion
 
 When values are loaded during runtime, their type is coerced to match the requested shape. The only exception to this
-rule is `Config.static()` which allows any datatype and doesn't perform any coercion. Otherwise, supported data types
+rule is `zen.cfg.static()` which allows any datatype and doesn't perform any coercion. Otherwise, supported data types
 are strings, numbers (int and float), bool, array, slice, optional. The difference between arrays and slices is simply
 that arrays must contain the exact number of elements specified in the config description, while slices behave like
 variable length arrays.
@@ -146,8 +146,8 @@ variable length arrays.
 #### Static
 
 Allows you to wrap an existing object into a `Config` instance. A shallow copy of the object is made. No allocations
-take place, caller is responsible for managing object's lifecycle. Consequently, calling `cfg.deinit(allocator)` is
-completely optional, but not invalid.
+take place, caller is responsible for managing object's lifecycle. Consequently, calling `zen.cfg.deinit(Config,
+allocator, cfg)` is completely optional, but not invalid.
 
 > This source has no limitations on the configuration shape
 

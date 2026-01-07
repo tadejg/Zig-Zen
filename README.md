@@ -216,7 +216,7 @@ const Config = zen.cfg.Config(struct {
 // ...or pass the entire nested object
 ... = Config.lazy.def;
 const json = "..."; // e.g. load this from a file
-var cfg = try zen.cfg.loadJson(Config, json);
+var cfg = try zen.cfg.loadJson(Config, allocator, json);
 defer zen.cfg.deinit(Config, allocator, cfg);
 std.debug.print("{d} {s}\n", .{ cfg.value.abc, cfg.value.def.baz });
 ```

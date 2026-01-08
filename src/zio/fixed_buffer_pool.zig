@@ -37,7 +37,8 @@ pub fn alloc(self: *Self) AllocError![]u8 {
 pub fn free(self: *Self, buff: []u8) void {
     const buffPtr = @intFromPtr(buff.ptr);
     const selfBuffPtr = @intFromPtr(self.buff.ptr);
-    if (buffPtr < selfBuffPtr or buffPtr > (selfBuffPtr + buff.len - 1)) return;
+    const selfBuffEndPtr = selfBuffPtr + buff.len * @sizeOf(u8);
+    if (buffPtr < selfBuffPtr or buffPtr > selfBuffEndPtr) return;
     const idx = (buffPtr - selfBuffPtr) / self.chunkSize;
     self.freeStack[self.freeStackTop + 1] = @intCast(idx);
     self.freeStackTop += 1;

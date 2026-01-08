@@ -21,21 +21,19 @@ pub fn ParamRouter(comptime spec: anytype, comptime wildcardMode: route_radix_tr
 
         pub const Trie = RouteRadixTrie(trieRoutesFromSpec(&spec.routes), wildcardMode);
 
-        pub fn handleRequest(req: *const Request) !Response {
+        pub fn handleRequest(req: *const Request, res: *Response) !void {
+            res.statusCode = .notFound;
             const handlerPtr = Trie.match(req.path);
-            if (handlerPtr == null) return .{ .statusCode = .notFound };
+            if (handlerPtr == null) return;
             const handlers: *const Route.MethodHandlers = @ptrCast(@alignCast(handlerPtr.?));
             const activeTag = @intFromEnum(req.method);
             inline for (std.meta.fields(Request.Method)) |field| {
                 if (activeTag == field.value) {
                     if (@field(handlers, field.name)) |handler| {
-                        return handler(req);
-                    } else {
-                        return .{ .statusCode = .notFound };
-                    }
+                        return handler(req, res);
+                    } else return;
                 }
             }
-            return .{ .statusCode = .notFound };
         }
     };
 }

@@ -6,16 +6,16 @@ const routes = [_]zen.http.router.Route{
     .{ .pattern = "/", .handlers = .{ .GET = index, .POST = post } },
 };
 
-fn index(req: *const zen.http.Request) !zen.http.Response {
+fn index(req: *const zen.http.Request, res: *zen.http.Response) !void {
     _ = req;
-    std.log.info("INDEX", .{});
-    return .{ .statusCode = .ok };
+    // std.log.info("INDEX", .{});
+    res.statusCode = .ok;
 }
 
-fn post(req: *const zen.http.Request) !zen.http.Response {
+fn post(req: *const zen.http.Request, res: *zen.http.Response) !void {
     _ = req;
     std.log.info("POST", .{});
-    return .{ .statusCode = .ok };
+    res.statusCode = .ok;
 }
 
 pub fn main() !void {

@@ -54,6 +54,22 @@ pub fn removeSocket(self: *Self, socket: Socket) RemoveSocketError!void {
     try self.epoll.removeFd(socket.fd);
 }
 
+pub const WriteModeError = Epoll.WriteModeError;
+
+/// Sets the socket into write mode; handler will receive write readiness notifications instead of read notifications
+/// Handler ptr must be the same as in the call to addSocket()
+pub fn writeMode(self: *Self, socket: Socket, handler: *Handler) WriteModeError!void {
+    try self.epoll.writeMode(socket.fd, @intFromPtr(handler));
+}
+
+pub const ReadModeError = Epoll.ReadModeError;
+
+/// Sets the socket into read mode; handler will receive read readiness notifications instead of write notifications
+/// Handler ptr must be the same as in the call to addSocket()
+pub fn readMode(self: *Self, socket: Socket, handler: *Handler) ReadModeError!void {
+    try self.epoll.readMode(socket.fd, @intFromPtr(handler));
+}
+
 pub fn run(self: *Self) void {
     var running = true;
     while (running) {

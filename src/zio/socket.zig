@@ -27,7 +27,10 @@ pub fn invalid() Self {
 }
 
 pub fn deinit(self: *Self) void {
-    if (self.isValid()) std.posix.close(self.fd);
+    if (self.isValid()) {
+        std.posix.close(self.fd);
+        self.* = .invalid();
+    }
 }
 
 pub inline fn isValid(self: *Self) bool {

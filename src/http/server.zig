@@ -7,7 +7,10 @@ const Request = @import("request.zig");
 const Response = @import("response.zig");
 const RequestParser = @import("request_parser.zig");
 
-pub const RequestHandler = *const fn (req: *const Request) anyerror!Response;
+// TODO Replace with custom logger
+pub const log = std.log.scoped(.http_server);
+
+pub const RequestHandler = *const fn (req: *const Request, res: *Response) anyerror!void;
 
 pub const ClientBuffers = struct {
     readBuffer: Buffer,
@@ -91,6 +94,8 @@ pub fn Server(comptime spec: anytype) type {
                         .handler = .{ .extra = c, .callback = handleSocketEvent },
                         .server = self,
                         .req = .{ .connection = c },
+                        .res = .{ .statusCode = .ok },
+                        .resSerializer = .init(&c.res, c.writeBuffer),
                     };
                     self.freeConnectionList.prepend(&c.node);
                 }
@@ -107,37 +112,57 @@ pub fn Server(comptime spec: anytype) type {
 
             const AcceptConnectionError = error{
                 ConnectionLimitReached,
-            } || zio.FixedBufferPool.AllocError || zio.Reactor.AddSocketError || HandleReadError;
+            } || zio.FixedBufferPool.AllocError || zio.Reactor.AddSocketError || HandleReadError || std.Io.Writer.Error;
 
-            fn acceptConnection(self: *Self, socket: zio.Socket, ip: std.Io.net.IpAddress) AcceptConnectionError!void {
+            fn acceptConnection(
+                self: *Self,
+                socket: zio.Socket,
+                ip: std.Io.net.IpAddress,
+            ) AcceptConnectionError!*Connection {
                 var s = socket;
                 errdefer s.deinit();
                 const node = self.freeConnectionList.popFirst();
+                var addr = [_]u8{0} ** 64;
+                var writer = std.Io.Writer.fixed(&addr);
+                try ip.format(&writer);
                 if (node == null) {
-                    // TODO Log no empty connection slots
+                    log.warn("Connection limit reached. No empty slot for client {s}. Closing", .{writer.buffered()});
                     return error.ConnectionLimitReached;
                 }
                 errdefer self.freeConnectionList.prepend(node.?);
                 const conn: *Connection = @fieldParentPtr("node", node.?);
                 const readBuffer = try self.readBuffer.alloc();
                 errdefer self.readBuffer.free(readBuffer);
-                const writeBuffer = try self.readBuffer.alloc();
+                const writeBuffer = try self.writeBuffer.alloc();
                 errdefer self.writeBuffer.free(writeBuffer);
                 conn.socket = socket;
                 conn.ip = ip;
                 conn.readBuffer = readBuffer;
                 conn.writeBuffer = writeBuffer;
-                conn.writeBufferStart = 0;
-                conn.writeBufferEnd = 0;
                 conn.req = .{ .connection = conn };
+                conn.res = .{ .statusCode = .ok };
                 conn.reqParser = .init;
+                conn.resSerializer = .init(&conn.res, conn.writeBuffer);
                 try self.reactor.addSocket(socket, &conn.handler);
-                try self.handleRead(conn);
+                // log.debug("Client accepted {s}", .{writer.buffered()});
+                return conn;
             }
 
             fn closeConnection(self: *Self, conn: *Connection) void {
-                self.reactor.removeSocket(conn.socket) catch {
-                    // TODO Log error
+                // {
+                //     var addr = [_]u8{0} ** 64;
+                //     var writer = std.Io.Writer.fixed(&addr);
+                //     conn.ip.format(&writer) catch {};
+                //     log.debug("Closing connection {s}, open={}", .{ writer.buffered(), conn.socket.isValid() });
+                // }
+                if (!conn.socket.isValid()) return;
+                self.reactor.removeSocket(conn.socket) catch |e| {
+                    var addr = [_]u8{0} ** 64;
+                    var writer = std.Io.Writer.fixed(&addr);
+                    conn.ip.format(&writer) catch |ee| {
+                        log.err("Failed to format client IP, err={}", .{ee});
+                    };
+                    log.err("Failed to remove socket for client {s}, err={}", .{ writer.buffered(), e });
                 };
                 conn.socket.deinit();
                 self.readBuffer.free(conn.readBuffer);
@@ -147,52 +172,75 @@ pub fn Server(comptime spec: anytype) type {
 
             fn handleConnection(extra: ?*anyopaque, socket: zio.Socket, ip: std.Io.net.IpAddress) void {
                 const self: *Self = @ptrCast(@alignCast(extra orelse return));
-                self.acceptConnection(socket, ip) catch {
-                    // TODO Log error
+                const conn = self.acceptConnection(socket, ip) catch |e| {
+                    var addr = [_]u8{0} ** 64;
+                    var writer = std.Io.Writer.fixed(&addr);
+                    ip.format(&writer) catch |ee| {
+                        log.err("Failed to format client IP, err={}", .{ee});
+                    };
+                    log.err("Failed accept client {s}, err={}", .{ writer.buffered(), e });
+                    return;
+                };
+                self.handleRead(conn) catch |e| {
+                    var addr = [_]u8{0} ** 64;
+                    var writer = std.Io.Writer.fixed(&addr);
+                    ip.format(&writer) catch |ee| {
+                        log.err("Failed to format client IP, err={}", .{ee});
+                    };
+                    log.err("Failed read client {s}, err={}", .{ writer.buffered(), e });
+                    return;
                 };
             }
 
             const HandleReadError = error{
                 RequestHandlerFailed,
                 EndOfFile,
-            } || RequestParser.UpdateError || zio.Socket.ReadError;
+            } || RequestParser.UpdateError || zio.Socket.ReadError || HandleWriteError || zio.Reactor.WriteModeError;
 
-            fn handleRead(_: *Self, conn: *Connection) HandleReadError!void {
+            fn handleRead(self: *Self, conn: *Connection) HandleReadError!void {
                 loop: while (true) {
                     const read = conn.socket.read(conn.readBuffer) catch |e| switch (e) {
                         error.WouldBlock => break :loop,
+                        error.NotOpenForReading => return, // TODO Figure out why we even see this error
                         else => return e,
                     };
                     if (read == 0) return error.EndOfFile;
                     try conn.reqParser.update(&conn.req, conn.readBuffer[0..read]);
                     if (conn.reqParser.isDone()) {
-                        // TODO Call request handler and switch into write mode
-                        const res = spec.handleRequest(&conn.req) catch {
-                            // TODO Log err
+                        spec.handleRequest(&conn.req, &conn.res) catch |e| {
+                            var addr = [_]u8{0} ** 64;
+                            var writer = std.Io.Writer.fixed(&addr);
+                            conn.ip.format(&writer) catch |ee| {
+                                log.err("Failed to format client IP, err={}", .{ee});
+                            };
+                            log.err("Request handler failed for client {s}, err={}", .{ writer.buffered(), e });
                             return error.RequestHandlerFailed;
                         };
-                        _ = res; // TODO serialize
-                        std.log.info("Request parsed: {s} -> {s}", .{ conn.req.rawMethod, conn.req.path });
+                        try self.reactor.writeMode(conn.socket, &conn.handler);
+                        try self.handleWrite(conn);
                     }
                 }
             }
 
-            const HandleWriteError = zio.Socket.WriteError;
+            const HandleWriteError = std.Io.Reader.Error || zio.Socket.WriteError;
 
-            fn handleWrite(_: *Self, conn: *Connection) HandleWriteError!void {
-                // TODO While response serializer has more
-                while (true) {
-                    loop: while (conn.writeBufferStart < conn.writeBufferEnd) {
-                        const buff = conn.writeBuffer[conn.writeBufferStart..conn.writeBufferEnd];
-                        const written = conn.socket.write(buff) catch |e| switch (e) {
-                            error.WouldBlock => break :loop,
-                            else => return e,
-                        };
-                        conn.writeBufferStart += written;
+            fn handleWrite(self: *Self, conn: *Connection) HandleWriteError!void {
+                loop: while (true) {
+                    const reader: *std.Io.Reader = &conn.resSerializer.reader;
+                    var end = false;
+                    reader.fillMore() catch |e| switch (e) {
+                        error.EndOfStream => end = true,
+                        else => return e,
+                    };
+                    const written = conn.socket.write(reader.buffered()) catch |e| switch (e) {
+                        error.WouldBlock => break :loop,
+                        else => return e,
+                    };
+                    reader.toss(written);
+                    if (end and reader.bufferedLen() == 0) {
+                        self.closeConnection(conn);
+                        break :loop;
                     }
-                    // TODO Update serializer
-                    conn.writeBufferStart = 0;
-                    conn.writeBufferEnd = 0; // TODO Set based on serializer output
                 }
             }
 
@@ -200,17 +248,41 @@ pub fn Server(comptime spec: anytype) type {
                 const conn: *Connection = @ptrCast(@alignCast(extra.?));
                 const self: *Self = @ptrCast(@alignCast(conn.server));
                 switch (event) {
-                    .read => self.handleRead(conn) catch {
-                        // TODO Log error
+                    .read => self.handleRead(conn) catch |e| {
+                        var addr = [_]u8{0} ** 64;
+                        var writer = std.Io.Writer.fixed(&addr);
+                        conn.ip.format(&writer) catch |ee| {
+                            log.err("Failed to format client IP, err={}", .{ee});
+                        };
+                        log.err(
+                            "Handle read notification failed for client {s}. Closing, err={}",
+                            .{ writer.buffered(), e },
+                        );
                         self.closeConnection(conn);
                     },
-                    .write => self.handleWrite(conn) catch {
-                        // TODO Log error
+                    .write => self.handleWrite(conn) catch |e| {
+                        var addr = [_]u8{0} ** 64;
+                        var writer = std.Io.Writer.fixed(&addr);
+                        conn.ip.format(&writer) catch |ee| {
+                            log.err("Failed to format client IP, err={}", .{ee});
+                        };
+                        log.err(
+                            "Handle write notification failed for client {s}. Closing, err={}",
+                            .{ writer.buffered(), e },
+                        );
                         self.closeConnection(conn);
                     },
                     .hangup => self.closeConnection(conn),
                     .err => {
-                        // TODO Log error
+                        var addr = [_]u8{0} ** 64;
+                        var writer = std.Io.Writer.fixed(&addr);
+                        conn.ip.format(&writer) catch |ee| {
+                            log.err("Failed to format client IP, err={}", .{ee});
+                        };
+                        log.err(
+                            "Error notification received for client {s}. Closing",
+                            .{writer.buffered()},
+                        );
                         self.closeConnection(conn);
                     },
                 }

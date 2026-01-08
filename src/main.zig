@@ -8,7 +8,7 @@ const routes = [_]zen.http.router.Route{
 
 fn index(req: *const zen.http.Request, res: *zen.http.Response) !void {
     _ = req;
-    // std.log.info("INDEX", .{});
+    std.log.info("INDEX", .{});
     res.statusCode = .ok;
 }
 
@@ -25,6 +25,8 @@ pub fn main() !void {
         .leak => log.err("Leak detected", .{}),
     };
     const allocator = gpa.allocator();
+    // Currently requires multi-threaded I/O as there's no way to yield back to the I/O loop on single threaded system
+    // https://gitlab.com/tadej3/zig-zen/-/issues/3
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
     const Config = zen.cfg.Config(struct {

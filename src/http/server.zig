@@ -207,6 +207,8 @@ pub fn Server(comptime spec: anytype) type {
                     if (read == 0) return error.EndOfFile;
                     try conn.reqParser.update(&conn.req, conn.readBuffer[0..read]);
                     if (conn.reqParser.isDone()) {
+                        // TODO Create context and call `io.concurrent(spec.handleRequest, .{ &conn.req, &conn.res })`
+                        // TODO We need a way for the reactor to notify us when the future completes
                         spec.handleRequest(&conn.req, &conn.res) catch |e| {
                             var addr = [_]u8{0} ** 64;
                             var writer = std.Io.Writer.fixed(&addr);

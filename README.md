@@ -79,7 +79,8 @@ pub fn main() !void {
     };
     const allocator = gpa.allocator();
     // Pick your I/O
-    var threaded = std.Io.Threaded.init_single_threaded;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
     // Describe the shape of your config
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,

@@ -70,23 +70,17 @@ const zen = @import("zen");
 
 const log = std.log.scoped(.main);
 
-pub fn main() !void {
-    // Setup an allocator
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    defer switch (gpa.deinit()) {
-        .ok => {},
-        .leak => log.err("Leak detected", .{}),
-    };
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
     // Pick your I/O
-    var threaded: std.Io.Threaded = .init(allocator, .{});
+    var threaded: std.Io.Threaded = .init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
     // Describe the shape of your config
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,
     });
     // Load the configuration from your preferred source (env, dotenv file, json, ...)
-    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    var cfg = try zen.cfg.loadEnv(Config, allocator, init.minimal.environ);
     defer zen.cfg.deinit(Config, allocator, cfg);
     // Describe the application
     const App = zen.App(.{
@@ -124,7 +118,7 @@ zen.tcp.Server(.{ .listen = Config.lazy.STRING })
 After describing the configuration shape, load it from your favorite source.
 
 ```zig
-var cfg = try zen.cfg.loadEnv(Config, allocator);
+var cfg = try zen.cfg.loadEnv(Config, allocator, environ);
 defer zen.cfg.deinit(Config, allocator, cfg);
 // Access the loaded values
 cfg.value.STRING;
@@ -174,7 +168,7 @@ names are matched against environment variable names and values are coerced to t
 const Config = zen.cfg.Config(struct {
     PWD: []const u8,
 });
-var cfg = try zen.cfg.loadEnv(Config, allocator);
+var cfg = try zen.cfg.loadEnv(Config, allocator, environ);
 defer zen.cfg.deinit(Config, allocator, cfg);
 std.debug.print("{s}\n", .{ cfg.value.PWD });
 ```
@@ -243,18 +237,13 @@ var readBufferFreeStack = [_]u32{0} ** MAX_CONN;
 var writeBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
 var writeBufferFreeStack = [_]u32{0} ** MAX_CONN;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    defer switch (gpa.deinit()) {
-        .ok => {},
-        .leak => log.err("Leak detected", .{}),
-    };
-    const allocator = gpa.allocator();
-    var threaded = std.Io.Threaded.init(allocator);
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    var threaded = std.Io.Threaded.init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
     // Create the default config and load it from the system environment
     const Config = zen.cfg.Config(struct { TCP_BIND: []const u8 });
-    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    var cfg = try zen.cfg.loadEnv(Config, allocator, init.minimal.environ);
     defer zen.cfg.deinit(Config, allocator, cfg);
     // Create a static config for http buffers
     const HttpBuffersConfig = zen.cfg.Config(zen.http.ClientBuffers);

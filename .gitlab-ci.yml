@@ -1,6 +1,6 @@
 image: ubuntu:24.04
 variables:
-  ZIG_VERSION: zig-x86_64-linux-0.16.0-dev.1859+212968c57
+  ZIG_VERSION: zig-x86_64-linux-0.16.0-dev.2075+62d6bbc7d
 before_script:
   - apt update && apt install -y xz-utils wget
   - wget

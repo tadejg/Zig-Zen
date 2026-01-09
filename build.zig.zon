@@ -2,7 +2,7 @@
     .name = .zen,
     .version = "0.0.0",
     .fingerprint = 0x14a7e72957f68000, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.1892+53ebfde6b",
+    .minimum_zig_version = "0.16.0-dev.2075+62d6bbc7d",
     .dependencies = .{},
     .paths = .{
         "build.zig",

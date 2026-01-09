@@ -2,20 +2,25 @@ const std = @import("std");
 const val = @import("value.zig");
 
 /// Spec is assumed to be a struct type
-pub fn loadEnv(comptime Spec: type, allocator: std.mem.Allocator) LoadValueError!Spec {
+pub fn loadEnv(comptime Spec: type, allocator: std.mem.Allocator, environ: std.process.Environ) LoadValueError!Spec {
     var value: Spec = undefined;
     inline for (std.meta.fields(Spec)) |field| {
-        @field(value, field.name) = try loadValue(field.type, field.name, allocator);
+        @field(value, field.name) = try loadValue(field.type, field.name, allocator, environ);
     }
     return value;
 }
 
-pub const LoadValueError = std.process.GetEnvVarOwnedError || val.CoerceValueError;
+pub const LoadValueError = std.process.Environ.GetAllocError || val.CoerceValueError;
 
-fn loadValue(comptime T: type, comptime name: []const u8, allocator: std.mem.Allocator) LoadValueError!T {
+fn loadValue(
+    comptime T: type,
+    comptime name: []const u8,
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+) LoadValueError!T {
     const typeInfo = @typeInfo(T);
-    const value = std.process.getEnvVarOwned(allocator, name) catch |e| switch (e) {
-        error.EnvironmentVariableNotFound => {
+    const value = environ.getAlloc(allocator, name) catch |e| switch (e) {
+        error.EnvironmentVariableMissing => {
             if (typeInfo == .optional) return null;
             return e;
         },

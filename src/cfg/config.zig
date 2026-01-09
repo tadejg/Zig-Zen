@@ -24,8 +24,15 @@ pub fn Loaded(comptime T: type) type {
     @compileError("Not a config type");
 }
 
-pub fn loadEnv(comptime T: type, allocator: std.mem.Allocator) env.LoadValueError!Loaded(T) {
-    return .{ .value = try env.loadEnv(T.Spec, allocator), .isAlloc = true };
+pub fn loadEnv(
+    comptime T: type,
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+) env.LoadValueError!Loaded(T) {
+    return .{
+        .value = try env.loadEnv(T.Spec, allocator, environ),
+        .isAlloc = true,
+    };
 }
 
 pub const LoadDotEnvError = error{Unimplemented};

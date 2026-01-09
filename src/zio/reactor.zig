@@ -22,14 +22,16 @@ pub const Handler = struct {
     };
 };
 
+io: std.Io,
 epoll: Epoll,
 
 pub const InitError = Epoll.InitError;
 
-pub fn init() InitError!Self {
+pub fn init(io: std.Io) InitError!Self {
     var epoll = try Epoll.init();
     errdefer epoll.deinit();
     return .{
+        .io = io,
         .epoll = epoll,
     };
 }

@@ -18,21 +18,16 @@ fn post(req: *const zen.http.Request, res: *zen.http.Response) !void {
     res.statusCode = .ok;
 }
 
-pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
-    defer switch (gpa.deinit()) {
-        .ok => {},
-        .leak => log.err("Leak detected", .{}),
-    };
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
     // Currently requires multi-threaded I/O as there's no way to yield back to the I/O loop on single threaded system
     // https://gitlab.com/tadej3/zig-zen/-/issues/3
-    var threaded: std.Io.Threaded = .init(allocator, .{});
+    var threaded: std.Io.Threaded = .init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,
     });
-    var cfg = try zen.cfg.loadEnv(Config, allocator);
+    var cfg = try zen.cfg.loadEnv(Config, allocator, init.minimal.environ);
     defer zen.cfg.deinit(Config, allocator, cfg);
     const ConfigGroup = zen.cfg.Group(.{
         .default = Config,

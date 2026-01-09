@@ -10,7 +10,6 @@ pub fn Group(comptime configs: anytype) type {
     const numFields = typeInfo.@"struct".fields.len;
     var fieldNames: []const []const u8 = &.{};
     var fieldTypes: [numFields]type = .{undefined} ** numFields;
-    var fieldAttrs: [numFields]std.builtin.Type.StructField.Attributes = .{undefined} ** numFields;
     inline for (typeInfo.@"struct".fields, 0..) |field, i| {
         const CfgType = @field(configs, field.name);
         if (!@hasDecl(CfgType, "Spec") or !@hasDecl(CfgType, "lazy")) {
@@ -18,9 +17,8 @@ pub fn Group(comptime configs: anytype) type {
         }
         fieldNames = fieldNames ++ .{field.name};
         fieldTypes[i] = CfgType.Spec;
-        fieldAttrs[i] = .{};
     }
-    const GroupSpec = @Struct(.auto, null, fieldNames, &fieldTypes, &fieldAttrs);
+    const GroupSpec = @Struct(.auto, null, fieldNames, &fieldTypes, &@splat(.{}));
     return struct {
         pub const Spec = GroupSpec;
         pub const lazy: ref.References(Spec) = .{};

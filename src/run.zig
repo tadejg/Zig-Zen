@@ -17,7 +17,7 @@ fn Instances(comptime tuple: anytype) type {
 pub fn sync(comptime App: type, io: std.Io, config: anytype) !void {
     var instances: Instances(App.Spec.servers) = undefined;
     var numStarted: u32 = 0;
-    var reactor = try zio.Reactor.init();
+    var reactor = try zio.Reactor.init(io);
     defer reactor.deinit();
     defer inline for (&instances, 0..) |*v, i| {
         if (i < numStarted) v.stop(&reactor); // Avoid undefined instances

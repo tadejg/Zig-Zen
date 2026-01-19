@@ -2,6 +2,8 @@ const std = @import("std");
 const zen = @import("zen");
 
 const log = std.log.scoped(.main);
+const NUM_IO_WORKERS = 3;
+
 const routes = [_]zen.http.router.Route{
     .{ .pattern = "/", .handlers = .{ .GET = index, .POST = post } },
 };
@@ -26,7 +28,7 @@ const App = zen.App(.{
         }),
     },
 });
-var instances: [3]zen.AppInstance(App) = undefined;
+var instances: [NUM_IO_WORKERS]zen.AppInstance(App) = undefined;
 
 fn index(req: *const zen.http.Request, res: *zen.http.Response) !void {
     _ = req;
@@ -56,7 +58,7 @@ pub fn main(init: std.process.Init) !void {
     });
     var ioGroup: std.Io.Group = .init;
     defer ioGroup.cancel(io);
-    try zen.run(App, io, &ioGroup, groupCfg, &instances, .{ .ioWorkers = 3 });
+    try zen.run(App, io, &ioGroup, groupCfg, &instances, .{ .ioWorkers = NUM_IO_WORKERS });
     defer zen.stop(App, &instances);
     try zen.zio.SignalHandler.register(io, &ioGroup, shutdown);
     try ioGroup.await(io);

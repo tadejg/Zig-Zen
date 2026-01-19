@@ -69,6 +69,28 @@ const std = @import("std");
 const zen = @import("zen");
 
 const log = std.log.scoped(.example);
+/// How many concurrent I/O workers and consequently app instances do we want to start?
+const NUM_IO_WORKERS = 3;
+
+// Describe the shape of your config
+const Config = zen.cfg.Config(struct {
+    TCP_BIND: []const u8,
+});
+
+// Describe the application
+const App = zen.App(.{
+    .servers = .{
+        zen.tcp.Server(.{
+            // Components may be configured with comptime-known values or lazy configuration references
+            // .listen = "127.0.0.1:1355",
+            .listen = Config.lazy.TCP_BIND,
+        }),
+    },
+});
+
+// Prepare storage for the number of ioWorkers you plan to start. Each I/O worker gets its own event loop, listening
+// sockets, and other resources, including its own app instance.
+var instances: [NUM_IO_WORKERS]zen.AppInstance(App) = undefined;
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
@@ -76,33 +98,24 @@ pub fn main(init: std.process.Init) !void {
     var threaded: std.Io.Threaded = .init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
     const io = threaded.io();
-    // Describe the shape of your config
-    const Config = zen.cfg.Config(struct {
-        TCP_BIND: []const u8,
-    });
     // Load the configuration from your preferred source (env, dotenv file, json, ...)
     var cfg = try zen.cfg.loadEnv(Config, allocator, init.minimal.environ);
     defer zen.cfg.deinit(Config, allocator, cfg);
-    // Describe the application
-    const App = zen.App(.{
-        .servers = .{
-            zen.tcp.Server(.{
-                // Components may be configured with comptime-known values or lazy configuration references
-                // .listen = "127.0.0.1:1355",
-                .listen = Config.lazy.TCP_BIND,
-            }),
-        },
-    });
     // Prepare an I/O group to run the app in
     // You can always add your own tasks to this group
     var ioGroup: std.Io.Group = .init;
     defer ioGroup.cancel(io);
     // Start the reactor!
-    try zen.run(App, io, &ioGroup, cfg);
+    try zen.run(App, io, &ioGroup, cfg, &instances, .{ .ioWorkers = NUM_IO_WORKERS });
+    defer zen.stop(App, &instances);
+    // Register a SIGINT handler to enable graceful shutdown
+    try zen.zio.SignalHandler.register(io, &ioGroup, shutdown);
     // Await the group
-    ioGroup.await(io) catch {
-        log.info("I/O group cancelled", .{});
-    };
+    try ioGroup.await(io);
+}
+
+fn shutdown() void {
+    zen.stop(App, &instances);
 }
 ```
 
@@ -240,6 +253,7 @@ const zen = @import("zen");
 const log = std.log.scoped(.main);
 const BUFF_LEN = 8 * 1024;
 const MAX_CONN = 128;
+const NUM_IO_WORKERS = 3;
 
 var readBuffer = [_]u8{0} ** (MAX_CONN * BUFF_LEN);
 var readBufferFreeStack = [_]u32{0} ** MAX_CONN;
@@ -280,10 +294,12 @@ pub fn main(init: std.process.Init) !void {
             }),
         },
     });
-    // Start the app using the group config
     var ioGroup: std.Io.Group = .init;
     defer ioGroup.cancel(io);
-    try zen.run(App, io, &ioGroup, groupCfg);
+    var instances: [NUM_IO_WORKERS]zen.AppInstance(App) = undefined;
+    // Start the app using the group config
+    try zen.run(App, io, &ioGroup, groupCfg, &instances, .{ .ioWorkers = NUM_IO_WORKERS });
+    defer zen.stop(App, &instances);
     ioGroup.await(io) catch {
         log.info("I/O group cancelled", .{});
     };

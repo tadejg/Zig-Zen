@@ -68,13 +68,14 @@ Zen API documentation can be found on [Gitlab Pages](https://docs.zigzen.dev) or
 const std = @import("std");
 const zen = @import("zen");
 
-const log = std.log.scoped(.main);
+const log = std.log.scoped(.example);
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
-    // Pick your I/O
+    // Pick your I/O (must support concurrency)
     var threaded: std.Io.Threaded = .init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
+    const io = threaded.io();
     // Describe the shape of your config
     const Config = zen.cfg.Config(struct {
         TCP_BIND: []const u8,
@@ -92,8 +93,16 @@ pub fn main(init: std.process.Init) !void {
             }),
         },
     });
-    // Pick your runtime and start the reactor!
-    try zen.run.sync(App, threaded.io(), cfg);
+    // Prepare an I/O group to run the app in
+    // You can always add your own tasks to this group
+    var ioGroup: std.Io.Group = .init;
+    defer ioGroup.cancel(io);
+    // Start the reactor!
+    try zen.run(App, io, &ioGroup, cfg);
+    // Await the group
+    ioGroup.await(io) catch {
+        log.info("I/O group cancelled", .{});
+    };
 }
 ```
 
@@ -241,6 +250,7 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     var threaded = std.Io.Threaded.init(allocator, .{ .environ = .empty });
     defer threaded.deinit();
+    const io = threaded.io();
     // Create the default config and load it from the system environment
     const Config = zen.cfg.Config(struct { TCP_BIND: []const u8 });
     var cfg = try zen.cfg.loadEnv(Config, allocator, init.minimal.environ);
@@ -271,6 +281,11 @@ pub fn main(init: std.process.Init) !void {
         },
     });
     // Start the app using the group config
-    try zen.run.sync(App, threaded.io(), groupCfg);
+    var ioGroup: std.Io.Group = .init;
+    defer ioGroup.cancel(io);
+    try zen.run(App, io, &ioGroup, groupCfg);
+    ioGroup.await(io) catch {
+        log.info("I/O group cancelled", .{});
+    };
 }
 ```

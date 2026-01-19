@@ -24,6 +24,7 @@ pub const Handler = struct {
 
 io: std.Io,
 epoll: Epoll,
+doneSignal: std.Thread.Semaphore = .{},
 
 pub const InitError = Epoll.InitError;
 
@@ -40,6 +41,7 @@ pub fn deinit(self: *Self) void {
     self.epoll.notify() catch {
         // TODO Log
     };
+    self.doneSignal.timedWait(3 * std.time.ns_per_s) catch {};
     self.epoll.deinit();
 }
 
@@ -97,4 +99,5 @@ pub fn run(self: *Self) void {
         }
     }
     std.log.info("Reactor shutdown", .{});
+    self.doneSignal.post();
 }

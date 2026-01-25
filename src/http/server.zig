@@ -33,12 +33,19 @@ pub fn Server(comptime spec: anytype) type {
         });
 
         /// The instance needs a stable pointer as it registers it with the TCP server for event notifications
-        pub fn start(io: std.Io, instance: *Instance, config: anytype, reactor: *zio.Reactor) !void {
+        pub fn start(
+            io: std.Io,
+            ioGroup: *std.Io.Group,
+            instance: *Instance,
+            config: anytype,
+            reactor: *zio.Reactor,
+        ) !void {
             const listen = cfg.ref.resolveIfRef(spec.listen, config.value);
             const buffers: ClientBuffers = cfg.ref.resolveIfRef(spec.buffers, config.value);
             const connectionPool: []Connection = cfg.ref.resolveIfRef(spec.connectionPool, config.value);
             try instance.init(.{
                 .io = io,
+                .ioGroup = ioGroup,
                 .listen = listen,
                 .reactor = reactor,
                 .buffers = buffers,
@@ -51,6 +58,7 @@ pub fn Server(comptime spec: anytype) type {
 
             pub const StartOpts = struct {
                 io: std.Io,
+                ioGroup: *std.Io.Group,
                 listen: []const u8,
                 reactor: *zio.Reactor,
                 buffers: ClientBuffers,
@@ -58,6 +66,7 @@ pub fn Server(comptime spec: anytype) type {
             };
 
             io: std.Io,
+            ioGroup: *std.Io.Group,
             server: TcpServer.Instance,
             reactor: *zio.Reactor,
             readBuffer: zio.FixedBufferPool,
@@ -82,6 +91,7 @@ pub fn Server(comptime spec: anytype) type {
                 const maxConns = @min(@min(opts.connectionPool.len, readBuffer.numChunks), writeBuffer.numChunks);
                 self.* = .{
                     .io = opts.io,
+                    .ioGroup = opts.ioGroup,
                     .reactor = opts.reactor,
                     .readBuffer = readBuffer,
                     .writeBuffer = writeBuffer,
@@ -198,7 +208,8 @@ pub fn Server(comptime spec: anytype) type {
 
             const HandleReadError = error{
                 EndOfFile,
-            } || RequestParser.UpdateError || zio.Socket.ReadError || HandleWriteError || zio.Reactor.WriteModeError;
+            } || RequestParser.UpdateError || zio.Socket.ReadError || HandleWriteError ||
+                zio.Reactor.WriteModeError || zio.Reactor.AsyncError;
 
             fn handleRead(self: *Self, conn: *Connection) HandleReadError!void {
                 loop: while (true) {
@@ -211,20 +222,7 @@ pub fn Server(comptime spec: anytype) type {
                     try conn.reqParser.update(&conn.req, conn.readBuffer[0..read]);
                     if (conn.reqParser.isDone()) {
                         try self.reactor.writeMode(conn.socket, &conn.handler);
-                        // TODO Create context and call `io.concurrent(spec.handleRequest, .{ &conn.req, &conn.res })`
-                        // TODO We need a way for the reactor to notify us when the future completes
-                        const future = self.io.async(spec.handleRequest, .{ &conn.req, &conn.res });
-                        errdefer future.cancel(self.io) catch |e| {
-                            var addr = [_]u8{0} ** 64;
-                            var writer = std.Io.Writer.fixed(&addr);
-                            conn.ip.format(&writer) catch |ee| {
-                                log.err("Failed to format client IP, err={}", .{ee});
-                            };
-                            log.err("Request handler failed for client {s}, err={}", .{ writer.buffered(), e });
-                        };
-                        // TODO Add future to reactor
-                        // this will now be called after the reactor reports the future completed
-                        // try self.handleWrite(conn);
+                        try self.reactor.async(spec.handleRequest, .{ &conn.req, &conn.res }, &conn.handler);
                     }
                 }
             }
@@ -267,7 +265,7 @@ pub fn Server(comptime spec: anytype) type {
                         );
                         self.closeConnection(conn);
                     },
-                    .write => self.handleWrite(conn) catch |e| {
+                    .write, .future_completed => self.handleWrite(conn) catch |e| {
                         var addr = [_]u8{0} ** 64;
                         var writer = std.Io.Writer.fixed(&addr);
                         conn.ip.format(&writer) catch |ee| {
@@ -280,14 +278,14 @@ pub fn Server(comptime spec: anytype) type {
                         self.closeConnection(conn);
                     },
                     .hangup => self.closeConnection(conn),
-                    .err => {
+                    .err, .future_failed => {
                         var addr = [_]u8{0} ** 64;
                         var writer = std.Io.Writer.fixed(&addr);
                         conn.ip.format(&writer) catch |ee| {
                             log.err("Failed to format client IP, err={}", .{ee});
                         };
                         log.err(
-                            "Error notification received for client {s}. Closing",
+                            "Encountered an error for client {s}. Closing",
                             .{writer.buffered()},
                         );
                         self.closeConnection(conn);

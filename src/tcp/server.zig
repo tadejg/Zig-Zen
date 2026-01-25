@@ -10,7 +10,13 @@ pub fn Server(comptime spec: anytype) type {
         pub const Spec = spec;
 
         /// The instance needs a stable pointer as it registers it with the reactor for event notifications
-        pub fn start(_: std.Io, instance: *Instance, config: anytype, reactor: *zio.Reactor) Instance.InitError!void {
+        pub fn start(
+            _: std.Io,
+            _: *std.Io.Group,
+            instance: *Instance,
+            config: anytype,
+            reactor: *zio.Reactor,
+        ) Instance.InitError!void {
             const listen = cfg.ref.resolveIfRef(spec.listen, config.value);
             try instance.init(.{ .listen = listen, .reactor = reactor });
         }

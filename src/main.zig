@@ -2,7 +2,7 @@ const std = @import("std");
 const zen = @import("zen");
 
 const log = std.log.scoped(.main);
-const NUM_IO_WORKERS = 3;
+const NUM_IO_WORKERS = 1;
 
 const routes = [_]zen.http.router.Route{
     .{ .pattern = "/", .handlers = .{ .GET = index, .POST = post } },
@@ -39,7 +39,7 @@ fn index(req: *const zen.http.Request, res: *zen.http.Response) !void {
 fn post(req: *const zen.http.Request, res: *zen.http.Response) !void {
     _ = req;
     log.info("POST", .{});
-    res.statusCode = .ok;
+    res.statusCode = .created;
 }
 
 pub fn main(init: std.process.Init) !void {

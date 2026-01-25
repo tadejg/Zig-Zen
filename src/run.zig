@@ -33,7 +33,7 @@ fn startInstance(
     instance: *AppInstance(App),
 ) !void { // TODO Return `StartInstanceError!void` after server start() is updated to have a consistent interface
     instance.* = .{
-        .reactor = try zio.Reactor.init(io),
+        .reactor = try zio.Reactor.init(io, ioGroup),
         .servers = undefined,
     };
     errdefer instance.reactor.deinit();
@@ -42,10 +42,10 @@ fn startInstance(
         if (i < numStarted) s.stop(&instance.reactor);
     };
     inline for (App.Spec.servers, 0..) |s, i| {
-        try s.start(io, &instance.servers[i], config, &instance.reactor);
+        try s.start(io, ioGroup, &instance.servers[i], config, &instance.reactor);
         numStarted += 1;
     }
-    try ioGroup.concurrent(io, zio.Reactor.run, .{&instance.reactor});
+    try instance.reactor.start();
 }
 
 fn stopInstance(comptime App: type, instance: *AppInstance(App)) void {
